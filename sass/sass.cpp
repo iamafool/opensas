@@ -108,14 +108,43 @@ int main(int argc, char** argv)
     if (interactiveMode) {
         // Interactive mode: read code from stdin or a REPL-like interface
         logLogger->info("Running in interactive mode. Type SAS code and end with Ctrl+D (Unix) or Ctrl+Z (Windows):");
-        std::string line;
+        std::string codeBuffer;
         while (true) {
             std::cout << "SAS> ";
-            if (!std::getline(std::cin, line) || line == "quit" || line == "exit") {
+            std::string line;
+            if (!std::getline(std::cin, line)) {
+                // End of input (Ctrl+D / Ctrl+Z)
                 break;
             }
-            sasCode += line + "\n";
+
+            // If user enters "quit" or "exit"
+            if (line == "quit" || line == "exit") {
+                break;
+            }
+
+            codeBuffer += line + "\n";
+
+            // Check if we have a complete statement
+            // This could be as simple as checking for a semicolon:
+            // For a more robust check, consider actually tokenizing and checking syntax.
+            if (codeBuffer.find(';') != std::string::npos) {
+                // We have at least one complete statement
+                // Attempt to parse the buffer
+                bool success = parseAndExecuteSasCode(codeBuffer); // Your parsing function
+                if (!success) {
+                    std::cerr << "Error parsing code.\n";
+                }
+
+                // On success or failure, clear or adjust the buffer.
+                // If you parse everything, clear the buffer:
+                codeBuffer.clear();
+
+                // If you only parsed one statement and might have more partial code left,
+                // you'd remove the parsed portion and keep the remainder.
+            }
+            // If no semicolon found, just loop back and prompt for more input.
         }
+
     }
     else if (fileMode) {
         // File mode: read code from sasFile, output to console
