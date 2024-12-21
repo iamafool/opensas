@@ -1,16 +1,18 @@
-﻿#include <iostream>
+﻿#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include "Token.h"
 #include <string>
+#include <iostream>
+#include <fstream>
 #include "Lexer.h"
 #include "Parser.h"
 #include "Interpreter.h"
 #include "DataEnvironment.h"
-#include "spdlog/spdlog.h"
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <fstream>
+#include "AST.h"
 
-// Pseudocode function to read SAS code from a file
-std::string readSasFile(const std::string& filename) {
+// Function to read SAS code from a file
+std::string readSasFile(const std::string &filename) {
     std::ifstream in(filename, std::ios::in | std::ios::binary);
     if (!in) {
         return "";
@@ -23,26 +25,37 @@ std::string readSasFile(const std::string& filename) {
     return contents;
 }
 
-// Pseudocode function to run SAS code
-// In your actual code, this would parse and execute the SAS code
-void runSasCode(const std::string& sasCode, spdlog::logger& logLogger, spdlog::logger& lstLogger, bool interactive) {
-    // Log that we are starting
-    logLogger.info("Running SAS code...");
-    if (interactive) {
-        logLogger.info("Mode: Interactive");
-    }
-    else {
-        logLogger.info("Mode: File-based");
+// Function to run SAS code
+void runSasCode(const std::string &sasCode, Interpreter &interpreter, bool interactive) {
+    // Lexing
+    Lexer lexer(sasCode);
+    std::vector<Token> tokens;
+    Token tok;
+    while ((tok = lexer.getNextToken()).type != TokenType::EOF_TOKEN) {
+        tokens.push_back(tok);
     }
 
-    // For demonstration, just print some placeholder results:
-    lstLogger.info("SAS Results:");
-    lstLogger.info("OBS     VAR1     VAR2");
-    lstLogger.info("1       10       20");
-    lstLogger.info("2       30       40");
+    // Parsing
+    Parser parser(tokens);
+    std::unique_ptr<ProgramNode> program;
+    try {
+        program = parser.parse();
+        if (!program) {
+            throw std::runtime_error("Failed to parse program.");
+        }
+    }
+    catch (const std::runtime_error &e) {
+        interpreter.logLogger.error("Parsing failed: {}", e.what());
+        return;
+    }
 
-    // Log done
-    logLogger.info("SAS code execution finished.");
+    // Interpret
+    try {
+        interpreter.executeProgram(program);
+    }
+    catch (const std::runtime_error &e) {
+        interpreter.logLogger.error("Execution failed: {}", e.what());
+    }
 }
 
 int main(int argc, char** argv)
@@ -83,37 +96,57 @@ int main(int argc, char** argv)
 
     if (batchMode) {
         // Batch mode: log and lst to files
-        auto logSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
-        auto lstSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(lstFile, true);
+        try {
+            auto logSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile, true);
+            auto lstSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(lstFile, true);
 
-        logLogger = std::make_shared<spdlog::logger>("log", logSink);
-        lstLogger = std::make_shared<spdlog::logger>("lst", lstSink);
+            logLogger = std::make_shared<spdlog::logger>("log", logSink);
+            lstLogger = std::make_shared<spdlog::logger>("lst", lstSink);
+        }
+        catch (const spdlog::spdlog_ex &ex) {
+            std::cerr << "Log initialization failed: " << ex.what() << "\n";
+            return 1;
+        }
     }
     else {
         // Interactive or file mode: log and lst to console
-        auto logSink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-        auto lstSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        try {
+            auto logSink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+            auto lstSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
 
-        logLogger = std::make_shared<spdlog::logger>("log", logSink);
-        lstLogger = std::make_shared<spdlog::logger>("lst", lstSink);
+            logLogger = std::make_shared<spdlog::logger>("log", logSink);
+            lstLogger = std::make_shared<spdlog::logger>("lst", lstSink);
+        }
+        catch (const spdlog::spdlog_ex &ex) {
+            std::cerr << "Console log initialization failed: " << ex.what() << "\n";
+            return 1;
+        }
     }
 
+    // Register loggers
     spdlog::register_logger(logLogger);
     spdlog::register_logger(lstLogger);
     logLogger->set_level(spdlog::level::info);
     lstLogger->set_level(spdlog::level::info);
 
+    DataEnvironment env;
+    Interpreter interpreter(env, *logLogger, *lstLogger);
+
     std::string sasCode;
 
     if (interactiveMode) {
         // Interactive mode: read code from stdin or a REPL-like interface
-        logLogger->info("Running in interactive mode. Type SAS code and end with Ctrl+D (Unix) or Ctrl+Z (Windows):");
+        logLogger->info("Running in interactive mode. Type SAS code line by line. End with 'run;' or type 'quit'/'exit' to exit.");
+        std::string line;
         std::string codeBuffer;
         while (true) {
             std::cout << "SAS> ";
-            std::string line;
             if (!std::getline(std::cin, line)) {
                 // End of input (Ctrl+D / Ctrl+Z)
+                if (!codeBuffer.empty()) {
+                    logLogger->info("Executing accumulated code:\n{}", codeBuffer);
+                    runSasCode(codeBuffer, interpreter, true);
+                }
                 break;
             }
 
@@ -122,29 +155,32 @@ int main(int argc, char** argv)
                 break;
             }
 
+            // Handle comments: skip lines starting with '*', or remove inline comments
+            // Simplistic handling here; consider more robust comment parsing
+            if (!line.empty() && line[0] == '*') {
+                logLogger->info("Skipping comment: {}", line);
+                continue;
+            }
+
+            // Append line to buffer
             codeBuffer += line + "\n";
 
-            // Check if we have a complete statement
-            // This could be as simple as checking for a semicolon:
-            // For a more robust check, consider actually tokenizing and checking syntax.
-            if (codeBuffer.find(';') != std::string::npos) {
-                // We have at least one complete statement
-                // Attempt to parse the buffer
-                bool success = parseAndExecuteSasCode(codeBuffer); // Your parsing function
-                if (!success) {
-                    std::cerr << "Error parsing code.\n";
-                }
+            // Check if codeBuffer contains at least one semicolon indicating statement termination
+            size_t semicolonPos = codeBuffer.find(';');
+            while (semicolonPos != std::string::npos) {
+                // Extract the statement up to the semicolon
+                std::string statement = codeBuffer.substr(0, semicolonPos + 1);
+                logLogger->info("Executing statement: {}", statement);
 
-                // On success or failure, clear or adjust the buffer.
-                // If you parse everything, clear the buffer:
-                codeBuffer.clear();
+                runSasCode(statement, interpreter, true);
 
-                // If you only parsed one statement and might have more partial code left,
-                // you'd remove the parsed portion and keep the remainder.
+                // Remove the executed statement from the buffer
+                codeBuffer.erase(0, semicolonPos + 1);
+
+                // Check for another semicolon in the remaining buffer
+                semicolonPos = codeBuffer.find(';');
             }
-            // If no semicolon found, just loop back and prompt for more input.
         }
-
     }
     else if (fileMode) {
         // File mode: read code from sasFile, output to console
@@ -154,6 +190,8 @@ int main(int argc, char** argv)
             logLogger->error("Failed to read SAS file or file is empty: {}", sasFile);
             return 1;
         }
+
+        runSasCode(sasCode, interpreter, false);
     }
     else if (batchMode) {
         // Batch mode: read code from sasFile, log and lst to files
@@ -163,10 +201,9 @@ int main(int argc, char** argv)
             logLogger->error("Failed to read SAS file or file is empty: {}", sasFile);
             return 1;
         }
-    }
 
-    // Run the SAS code
-    runSasCode(sasCode, *logLogger, *lstLogger, interactiveMode);
+        runSasCode(sasCode, interpreter, false);
+    }
 
     return 0;
 }

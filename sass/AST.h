@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 
+// Base class for all AST nodes
 class ASTNode {
 public:
     virtual ~ASTNode() {}
@@ -54,5 +55,31 @@ public:
 
 // Represents an OUTPUT statement
 class OutputNode : public ASTNode {};
+
+// New AST Nodes for Global Statements
+
+// Represents an OPTIONS statement: options option1=value1 option2=value2;
+class OptionsNode : public ASTNode {
+public:
+    std::vector<std::pair<std::string, std::string>> options;
+};
+
+// Represents a LIBNAME statement: libname libref 'path';
+class LibnameNode : public ASTNode {
+public:
+    std::string libref;
+    std::string path;
+};
+
+// Represents a TITLE statement: title 'Your Title';
+class TitleNode : public ASTNode {
+public:
+    std::string title;
+};
+
+class ProgramNode : public ASTNode {
+public:
+    std::vector<std::unique_ptr<ASTNode>> statements;
+};
 
 #endif // AST_H
