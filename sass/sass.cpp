@@ -2,34 +2,41 @@
 #include <string>
 #include "Lexer.h"
 #include "Parser.h"
-#include "AST.h"
 #include "Interpreter.h"
 #include "DataEnvironment.h"
 
 int main() {
-    // A simple REPL
-    DataEnvironment dataEnv;
-    Interpreter interpreter(dataEnv);
+    // Example SAS-like code:
+    // data out; set in;
+    // x = 42;
+    // if x then output;
+    // run;
 
-    std::string line;
-    while (true) {
-        std::cout << "SAS> ";
-        if (!std::getline(std::cin, line)) break;
-        if (line == "exit" || line == "quit") break;
+    std::string code = "data out; set in; x = 42; if x then output; run;";
 
-        // Lexing
-        Lexer lexer(line);
-        auto tokens = lexer.tokenize();
+    // Prepare environment
+    DataEnvironment env;
+    // Create a sample input dataset
+    DataSet inData;
+    inData.rows.push_back({ {{"x", 0.0}} });
+    inData.rows.push_back({ {{"x", 1.0}} });
+    env.dataSets["in"] = inData;
 
-        // Parsing
-        Parser parser(tokens);
-        auto ast = parser.parse(); // returns an AST node representing the statement
-
-        // Interpretation
-        interpreter.execute(ast);
-
-        // Possibly print results or logs
+    // Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens;
+    Token tok;
+    while ((tok = lexer.getNextToken()).type != TokenType::EOF_TOKEN) {
+        tokens.push_back(tok);
     }
+
+    // Parse
+    Parser parser(tokens);
+    std::unique_ptr<ASTNode> root = parser.parse();
+
+    // Interpret
+    Interpreter interpreter(env);
+    interpreter.execute(root);
 
     return 0;
 }

@@ -3,7 +3,7 @@
 #
 
 # Add source to this project's executable.
-add_executable (sass "sass.cpp" "sass.h")
+add_executable (sass "sass.cpp" "sass.h" "Token.h" "Lexer.h" "Lexer.cpp" "AST.h" "Parser.h" "Parser.cpp" "DataEnvironment.h" "Interpreter.h" "Interpreter.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET sass PROPERTY CXX_STANDARD 20)
