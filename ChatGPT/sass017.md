@@ -1,14 +1,26 @@
-ï»¿#include <iostream>
-#include <string>
-#include "Lexer.h"
-#include "Parser.h"
-#include "Interpreter.h"
-#include "DataEnvironment.h"
-#include "spdlog/spdlog.h"
+Please use spdlog to implement my log and lst (output) system: for the console, both log and lst output to the console, but for the batch mode, support the args -sas=xxx.sas -log=xxx.log -lst=xxx.lst
+ChatGPT
+
+Thought for 10 seconds
+Below is an example implementation using spdlog to set up two separate output streams: one for the SAS log and another for the SAS listing output (lst). The code:
+
+Parses command-line arguments -sas=xxx.sas -log=xxx.log -lst=xxx.lst.
+If all three arguments are provided, it is considered ¡°batch mode,¡± and logging and output go to the specified files.
+If these arguments are not all provided, it¡¯s considered ¡°interactive mode,¡± and both log and lst output go to the console.
+You can adjust this basic framework to match more precisely how SAS behaves.
+
+Example Code:
+
+cpp
+Copy code
+#include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include <string>
+#include <iostream>
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     std::string sasFile;
     std::string logFile;
     std::string lstFile;
@@ -19,11 +31,9 @@ int main(int argc, char** argv) {
         std::string arg = argv[i];
         if (arg.rfind("-sas=", 0) == 0) {
             sasFile = arg.substr(5);
-        }
-        else if (arg.rfind("-log=", 0) == 0) {
+        } else if (arg.rfind("-log=", 0) == 0) {
             logFile = arg.substr(5);
-        }
-        else if (arg.rfind("-lst=", 0) == 0) {
+        } else if (arg.rfind("-lst=", 0) == 0) {
             lstFile = arg.substr(5);
         }
     }
@@ -42,8 +52,7 @@ int main(int argc, char** argv) {
 
         logLogger = std::make_shared<spdlog::logger>("log", logSink);
         lstLogger = std::make_shared<spdlog::logger>("lst", lstSink);
-    }
-    else {
+    } else {
         // Interactive mode: log and output to console
         // Use different color sinks for distinction if you like
         auto logSink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
@@ -66,8 +75,7 @@ int main(int argc, char** argv) {
     logLogger->info("SAS Interpreter started.");
     if (batchMode) {
         logLogger->info("Running in batch mode with SAS file: {}", sasFile);
-    }
-    else {
+    } else {
         logLogger->info("Running in interactive mode.");
     }
 
@@ -83,37 +91,13 @@ int main(int argc, char** argv) {
     // ...
 
     logLogger->info("SAS Interpreter finished.");
-    // Example SAS-like code:
-    // data out; set in;
-    // x = 42;
-    // if x then output;
-    // run;
-
-    std::string code = "data out; set in; x = 42; if x then output; run;";
-
-    // Prepare environment
-    DataEnvironment env;
-    // Create a sample input dataset
-    DataSet inData;
-    inData.rows.push_back({ {{"x", 0.0}} });
-    inData.rows.push_back({ {{"x", 1.0}} });
-    env.dataSets["in"] = inData;
-
-    // Lex
-    Lexer lexer(code);
-    std::vector<Token> tokens;
-    Token tok;
-    while ((tok = lexer.getNextToken()).type != TokenType::EOF_TOKEN) {
-        tokens.push_back(tok);
-    }
-
-    // Parse
-    Parser parser(tokens);
-    std::unique_ptr<ASTNode> root = parser.parse();
-
-    // Interpret
-    Interpreter interpreter(env);
-    interpreter.execute(root);
 
     return 0;
 }
+Key Points:
+
+In batch mode, all logging and output are sent to files. If the specified files already exist, they are truncated (overwritten).
+In interactive mode, the log messages go to stderr and listing (output) messages go to stdout. You can choose the sinks you prefer¡ªboth can go to stdout or stderr if you like, but separating them can make it clearer.
+spdlog handles thread safety and flushing. You can add timestamps, patterns, or change log levels as needed.
+If you need more detailed formatting or handling of SAS-specific semantics (like echoing the code in the log, adding line numbers, or including warnings and errors), you can expand the logging logic within the code where you process the SAS steps.
+This provides a flexible starting point that you can adapt as your SAS interpreter grows in complexity.
