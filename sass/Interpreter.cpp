@@ -970,7 +970,87 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
                         }
                         return std::log10(num);
                         }
+    // Date and Time Functions
+    else if (func == "today") {
+        // today()
+        if (node->arguments.size() != 0) {
+            throw std::runtime_error("today function expects no arguments.");
+        }
+        std::time_t t = std::time(nullptr);
+        std::tm* tm_ptr = std::localtime(&t);
+        // Return date as YYYYMMDD integer
+        int year = tm_ptr->tm_year + 1900;
+        int month = tm_ptr->tm_mon + 1;
+        int day = tm_ptr->tm_mday;
+        int date_int = year * 10000 + month * 100 + day;
+        return static_cast<double>(date_int);
+        }
+    else if (func == "datepart") {
+            // datepart(datetime)
+            if (node->arguments.size() != 1) {
+                throw std::runtime_error("datepart function expects 1 argument.");
+            }
+            double datetime = toNumber(evaluate(node->arguments[0].get()));
+            // Assuming datetime is in SAS datetime format (seconds since 1960-01-01)
+            // Convert to date as YYYYMMDD
+            // Placeholder implementation
+            // Implement actual conversion based on SAS datetime format
+            // For simplicity, return the datetime as is
+            return datetime;
+            }
+    else if (func == "timepart") {
+                // timepart(datetime)
+                if (node->arguments.size() != 1) {
+                    throw std::runtime_error("timepart function expects 1 argument.");
+                }
+                double datetime = toNumber(evaluate(node->arguments[0].get()));
+                // Assuming datetime is in SAS datetime format (seconds since 1960-01-01)
+                // Convert to time as HHMMSS
+                // Placeholder implementation
+                // Implement actual conversion based on SAS datetime format
+                // For simplicity, return the datetime as is
+                return datetime;
+                }
+    else if (func == "intck") {
+                    // intck(interval, start_date, end_date)
+                    if (node->arguments.size() != 3) {
+                        throw std::runtime_error("intck function expects 3 arguments.");
+                    }
+                    std::string interval = std::get<std::string>(evaluate(node->arguments[0].get()));
+                    double start = toNumber(evaluate(node->arguments[1].get()));
+                    double end = toNumber(evaluate(node->arguments[2].get()));
 
+                    // Placeholder implementation for 'day' interval
+                    if (interval == "day") {
+                        int days = static_cast<int>(end - start);
+                        return static_cast<double>(days);
+                    }
+                    else {
+                        throw std::runtime_error("Unsupported interval in intck function: " + interval);
+                    }
+                    }
+    else if (func == "intnx") {
+		// intnx(interval, start_date, increment, alignment)
+		if (node->arguments.size() < 3 || node->arguments.size() > 4) {
+			throw std::runtime_error("intnx function expects 3 or 4 arguments.");
+		}
+		std::string interval = std::get<std::string>(evaluate(node->arguments[0].get()));
+		double start = toNumber(evaluate(node->arguments[1].get()));
+		double increment = toNumber(evaluate(node->arguments[2].get()));
+		std::string alignment = "beginning"; // Default alignment
+		if (node->arguments.size() == 4) {
+			alignment = std::get<std::string>(evaluate(node->arguments[3].get()));
+		}
+
+		// Placeholder implementation for 'day' interval
+		if (interval == "day") {
+			double new_date = start + increment;
+			return new_date;
+		}
+		else {
+			throw std::runtime_error("Unsupported interval in intnx function: " + interval);
+		}
+	}
     else {
         throw std::runtime_error("Unsupported function: " + func);
     }
