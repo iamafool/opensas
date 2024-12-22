@@ -1,9 +1,11 @@
 #include "Interpreter.h"
+#include "Sorter.h"
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
+#include <unordered_set>
 
 // Execute the entire program
 void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
@@ -1100,55 +1102,143 @@ void Interpreter::executeMerge(MergeStatementNode* node) {
         throw std::runtime_error("MERGE statement requires a preceding BY statement.");
     }
 
-    // Ensure all datasets are sorted by BY variables
+    // Sort all datasets by BY variables
     for (auto ds : mergeDatasets) {
-        // Implement sorting if not already sorted
-        // Placeholder: Assume datasets are pre-sorted
-        logLogger.info("Dataset '{}' is assumed to be sorted by BY variables.", ds->name);
+        Sorter::sortDataset(ds, byVariables);
+        logLogger.info("Dataset '{}' sorted by BY variables.", ds->name);
     }
 
     // Initialize iterators for each dataset
     std::vector<size_t> iterators(mergeDatasets.size(), 0);
+    size_t numDatasets = mergeDatasets.size();
 
-    // Determine the number of observations in each dataset
-    size_t numRows = 0;
-    for (auto ds : mergeDatasets) {
-        numRows = std::max(numRows, ds->rows.size());
-    }
+    // Create or clear the output dataset
+    auto outputDataSet = env.getCurrentDataSet();
+    outputDataSet->rows.clear();
 
-    // Iterate through datasets and merge rows based on BY variables
-    for (size_t i = 0; i < numRows; ++i) {
+    bool continueMerging = true;
+
+    while (continueMerging) {
+        // Collect current BY variable values from each dataset
+        std::vector<std::vector<double>> currentBYValues(numDatasets, std::vector<double>());
+        bool anyDatasetHasRows = false;
+
+        for (size_t i = 0; i < numDatasets; ++i) {
+            if (iterators[i] < mergeDatasets[i]->rows.size()) {
+                anyDatasetHasRows = true;
+                const Row& row = mergeDatasets[i]->rows[iterators[i]];
+                std::vector<double> byVals;
+                for (const auto& var : byVariables) {
+                    double val = 0.0;
+                    auto it = row.columns.find(var);
+                    if (it != row.columns.end() && std::holds_alternative<double>(it->second)) {
+                        val = std::get<double>(it->second);
+                    }
+                    byVals.push_back(val);
+                }
+                currentBYValues[i] = byVals;
+            }
+        }
+
+        if (!anyDatasetHasRows) {
+            break; // All datasets have been fully iterated
+        }
+
+        // Check for data type consistency across datasets for BY variables
+        for (size_t j = 0; j < byVariables.size(); ++j) {
+            double referenceVal = currentBYValues[0][j];
+            for (size_t i = 1; i < numDatasets; ++i) {
+                if (currentBYValues[i][j] != referenceVal) {
+                    throw std::runtime_error("Data type mismatch for BY variable '" + byVariables[j] + "' across datasets.");
+                }
+            }
+        }
+
+        // Determine the minimum BY values across datasets
+        std::vector<double> minBYValues = currentBYValues[0];
+        for (size_t i = 1; i < numDatasets; ++i) {
+            for (size_t j = 0; j < byVariables.size(); ++j) {
+                if (currentBYValues[i][j] < minBYValues[j]) {
+                    minBYValues[j] = currentBYValues[i][j];
+                }
+                else if (currentBYValues[i][j] > minBYValues[j]) {
+                    // No change
+                }
+            }
+        }
+
+        // Collect all rows from datasets that match the min BY values
+        std::vector<Row> matchedRows;
+        for (size_t i = 0; i < numDatasets; ++i) {
+            if (iterators[i] < mergeDatasets[i]->rows.size()) {
+                bool match = true;
+                for (size_t j = 0; j < byVariables.size(); ++j) {
+                    if (currentBYValues[i][j] != minBYValues[j]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    matchedRows.push_back(mergeDatasets[i]->rows[iterators[i]]);
+                    iterators[i]++; // Move iterator forward
+                }
+            }
+        }
+
+        bool allDatasetsHaveRows = true;
+        for (size_t i = 0; i < numDatasets; ++i) {
+            if (iterators[i] >= mergeDatasets[i]->rows.size()) {
+                allDatasetsHaveRows = false;
+                break;
+            }
+        }
+
+        if (!allDatasetsHaveRows) {
+            // Handle unmatched keys by including remaining rows from datasets
+            for (size_t i = 0; i < numDatasets; ++i) {
+                while (iterators[i] < mergeDatasets[i]->rows.size()) {
+                    Row rowCopy = mergeDatasets[i]->rows[iterators[i]];
+                    iterators[i]++;
+                    // Merge with existing outputRow if necessary
+                    outputDataSet->rows.push_back(rowCopy);
+                }
+            }
+            break;
+        }
+
+        // Collect existing variable names to detect conflicts
+        std::unordered_set<std::string> existingVars;
+        for (const auto& var : byVariables) {
+            existingVars.insert(var);
+        }
+
+        // Merge the matched rows into a single row
         Row mergedRow;
-
-        for (size_t j = 0; j < mergeDatasets.size(); ++j) {
-            if (i < mergeDatasets[j]->rows.size()) {
-                const Row& currentRow = mergeDatasets[j]->rows[i];
-                for (const auto& col : currentRow.columns) {
-                    // Avoid overwriting existing columns
+        for (const auto& row : matchedRows) {
+            for (const auto& col : row.columns) {
+                // Avoid overwriting BY variables
+                if (std::find(byVariables.begin(), byVariables.end(), col.first) != byVariables.end()) {
+                    mergedRow.columns[col.first] = col.second;
+                }
+                else {
+                    // Handle variable name conflicts by prefixing with dataset name
                     if (mergedRow.columns.find(col.first) == mergedRow.columns.end()) {
                         mergedRow.columns[col.first] = col.second;
                     }
                     else {
-                        // Handle column name conflicts, possibly by prefixing with dataset name
-                        std::string newColName = mergeDatasets[j]->name + "_" + col.first;
+                        std::string newColName = row.columns.begin()->first + "_" + col.first;
                         mergedRow.columns[newColName] = col.second;
                     }
                 }
             }
-            else {
-                // Handle datasets with fewer rows by filling missing values
-                // Optionally, implement logic to handle missing observations
-                logLogger.warn("Dataset '{}' has fewer rows than others. Filling missing values.", mergeDatasets[j]->name);
-            }
         }
 
         // Append the merged row to the output dataset
-        // TODO auto outputDataSet = env.getOrCreateDataset(node->dataSetName, node->dataSetName);
-        // TODO outputDataSet->rows.push_back(mergedRow);
+        outputDataSet->rows.push_back(mergedRow);
     }
 
-    // TODO logLogger.info("MERGE statement executed successfully. Output dataset '{}' has {} observations.",
-        // TODO node->dataSetName, env.getOrCreateDataset(node->dataSetName, node->dataSetName)->rows.size());
+    logLogger.info("MERGE statement executed successfully. Output dataset '{}' has {} observations.",
+        outputDataSet->name, outputDataSet->rows.size());
 }
 
 

@@ -81,6 +81,9 @@ public:
     // Current row being processed in a DATA step
     Row currentRow;
 
+    // Current data set
+    std::shared_ptr<DataSet> currentDataSet;
+
     // Global settings
     std::unordered_map<std::string, std::string> options;
     std::unordered_map<std::string, std::string> librefs;
@@ -220,6 +223,15 @@ public:
         }
         return tokens;
     }
+
+    void setCurrentDataSet(std::shared_ptr<DataSet> ds) {
+        currentDataSet = ds;
+    }
+
+    std::shared_ptr<DataSet> getCurrentDataSet() {
+        return currentDataSet;
+    }
+
 };
 
 #endif // DATAENVIRONMENT_H
