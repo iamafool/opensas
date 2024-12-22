@@ -49,7 +49,12 @@ private:
     void setVariable(const std::string& varName, const Value& val);
 
     Value evaluate(ASTNode *node);
-    Value evaluateFunctionCall(FunctionCallNode* node); // New method
+    Value evaluateFunctionCall(FunctionCallNode* node);
+
+    // Helper methods for array operations
+    Value getArrayElement(const std::string& arrayName, int index);
+    void setArrayElement(const std::string& arrayName, int index, const Value& value);
+
 };
 
 #endif // INTERPRETER_H

@@ -288,6 +288,15 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
         if (tokens.size() > pos + 1 && tokens[pos + 1].type == TokenType::LPAREN) {
             return parseFunctionCall();
         }
+        // Check if it's an array element reference
+        else if (tokens.size() > pos + 1 && tokens[pos + 1].type == TokenType::LBRACKET) {
+            auto arrayElement = std::make_unique<ArrayElementNode>();
+            arrayElement->arrayName = consume(TokenType::IDENTIFIER, "Expected array name").text;
+            consume(TokenType::LBRACKET, "Expected '[' after array name");
+            arrayElement->index = parseExpression();
+            consume(TokenType::RBRACKET, "Expected ']' after array index");
+            return arrayElement;
+        }
         else {
             advance();
             return std::make_unique<VariableNode>(t.text);
@@ -458,19 +467,28 @@ std::unique_ptr<ASTNode> Parser::parseRetain() {
 
 
 std::unique_ptr<ASTNode> Parser::parseArray() {
-    // array arr {size} var1 var2 ...;
-    auto node = std::make_unique<ArrayNode>();
-    consume(TokenType::KEYWORD_ARRAY, "Expected 'array'");
-    node->arrayName = consume(TokenType::IDENTIFIER, "Expected array name").text;
-    consume(TokenType::LBRACE, "Expected '{' after array name");
-    std::string sizeStr = consume(TokenType::NUMBER, "Expected array size").text;
-    node->size = std::stoi(sizeStr);
+    // array <arrayName>{<size>} <var1> <var2> ...;
+    auto arrayNode = std::make_unique<ArrayNode>();
+    consume(TokenType::KEYWORD_ARRAY, "Expected 'array' keyword");
+
+    // Parse array name
+    arrayNode->arrayName = consume(TokenType::IDENTIFIER, "Expected array name").text;
+
+    // Parse size: {<size>}
+    consume(TokenType::LBRACE, "Expected '{' before array size");
+    Token sizeToken = consume(TokenType::NUMBER, "Expected numeric array size");
+    arrayNode->size = static_cast<int>(std::stod(sizeToken.text));
     consume(TokenType::RBRACE, "Expected '}' after array size");
+
+    // Parse variable list
     while (peek().type == TokenType::IDENTIFIER) {
-        node->variables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in array").text);
+        arrayNode->variables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in array").text);
     }
-    consume(TokenType::SEMICOLON, "Expected ';' after array statement");
-    return node;
+
+    // Expect semicolon
+    consume(TokenType::SEMICOLON, "Expected ';' after array declaration");
+
+    return arrayNode;
 }
 
 

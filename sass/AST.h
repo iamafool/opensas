@@ -142,6 +142,13 @@ public:
     std::vector<std::string> variables;
 };
 
+// Represents an array element reference: arrayName[index]
+class ArrayElementNode : public ASTNode {
+public:
+    std::string arrayName;
+    std::unique_ptr<ASTNode> index;
+};
+
 // Represents a DO loop: do <variable> = <start> to <end> by <increment>;
 class DoNode : public ASTNode {
 public:

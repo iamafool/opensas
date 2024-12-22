@@ -38,6 +38,9 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto ifElseIf = dynamic_cast<IfElseIfNode*>(node)) {
         executeIfElse(ifElseIf);
     }
+    else if (auto arrayNode = dynamic_cast<ArrayNode*>(node)) {
+        executeArray(arrayNode);
+    }
     else {
         // Handle other statements
         // For now, ignore unknown statements or throw an error
@@ -438,6 +441,10 @@ Value Interpreter::evaluate(ASTNode *node) {
     else if (auto funcCall = dynamic_cast<FunctionCallNode*>(node)) {
         return evaluateFunctionCall(funcCall);
     }
+    else if (auto arrayElem = dynamic_cast<ArrayElementNode*>(node)) {
+        int index = static_cast<int>(toNumber(evaluate(arrayElem->index.get())));
+        return getArrayElement(arrayElem->arrayName, index);
+    }
     else if (auto bin = dynamic_cast<BinaryOpNode*>(node)) {
         Value leftVal = evaluate(bin->left.get());
         Value rightVal = evaluate(bin->right.get());
@@ -500,16 +507,54 @@ void Interpreter::executeRetain(RetainNode* node) {
 
 // Execute an ARRAY statement
 void Interpreter::executeArray(ArrayNode* node) {
+    logLogger.info("Executing ARRAY declaration: {}", node->arrayName);
+    // Validate array size
+    if (node->size != static_cast<int>(node->variables.size())) {
+        throw std::runtime_error("Array size does not match the number of variables.");
+    }
+
+    // Store the array in the interpreter's array map
     arrays[node->arrayName] = node->variables;
-    logLogger.info("Declared array '{}' with variables: {}", node->arrayName,
+
+    logLogger.info("Array '{}' with size {} and variables: {}", node->arrayName, node->size,
         [&]() -> std::string {
-            std::string s;
+            std::string vars;
             for (const auto& var : node->variables) {
-                s += var + " ";
+                vars += var + " ";
             }
-            return s;
+            return vars;
         }());
 }
+
+Value Interpreter::getArrayElement(const std::string& arrayName, int index) {
+    if (arrays.find(arrayName) == arrays.end()) {
+        throw std::runtime_error("Undefined array: " + arrayName);
+    }
+    if (index < 1 || index > static_cast<int>(arrays[arrayName].size())) {
+        throw std::runtime_error("Array index out of bounds for array: " + arrayName);
+    }
+    std::string varName = arrays[arrayName][index - 1];
+    auto it = env.currentRow.columns.find(varName);
+    if (it != env.currentRow.columns.end()) {
+        return it->second;
+    }
+    else {
+        // Variable not found, assume missing value represented as 0 or empty string
+        return 0.0; // or throw an error based on SAS behavior
+    }
+}
+
+void Interpreter::setArrayElement(const std::string& arrayName, int index, const Value& value) {
+    if (arrays.find(arrayName) == arrays.end()) {
+        throw std::runtime_error("Undefined array: " + arrayName);
+    }
+    if (index < 1 || index > static_cast<int>(arrays[arrayName].size())) {
+        throw std::runtime_error("Array index out of bounds for array: " + arrayName);
+    }
+    std::string varName = arrays[arrayName][index - 1];
+    env.currentRow.columns[varName] = value;
+}
+
 
 // Execute a DO loop
 void Interpreter::executeDo(DoNode* node) {

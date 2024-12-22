@@ -37,6 +37,8 @@ namespace sass {
         RPAREN,
         LBRACE,
         RBRACE,
+        LBRACKET,
+        RBRACKET,
         COMMA,
         QUOTE,
         DOT,
