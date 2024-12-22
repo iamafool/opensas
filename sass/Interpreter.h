@@ -26,7 +26,7 @@ private:
     void executeDataStep(DataStepNode *node);
     void executeAssignment(AssignmentNode *node);
     void executeIfThen(IfThenNode *node);
-    void executeIfElse(IfElseNode* node); // Added method
+    void executeIfElse(IfElseIfNode* node); // Updated method
     void executeOutput(OutputNode *node);
     void executeOptions(OptionsNode *node);
     void executeLibname(LibnameNode *node);
@@ -39,7 +39,7 @@ private:
     void executeDo(DoNode* node);
     void executeProcSort(ProcSortNode* node);
     void executeProcMeans(ProcMeansNode* node);
-
+    void executeBlock(BlockNode* node);
 
     double toNumber(const Value &v);
     std::string toString(const Value &v);

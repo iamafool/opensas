@@ -8,6 +8,7 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["OR"] = TokenType::OR;
     keywords["NOT"] = TokenType::NOT;
     keywords["ELSE"] = TokenType::KEYWORD_ELSE;
+    keywords["ELSE IF"] = TokenType::KEYWORD_ELSE_IF;
 }
 
 char Lexer::peekChar() const {
@@ -209,6 +210,41 @@ Token Lexer::getNextToken() {
             // Convert to uppercase for case-insensitive matching
             std::string upperIdent = ident;
             for (auto& c : upperIdent) c = toupper(c);
+
+            // Check for 'ELSE IF' combination
+            if (upperIdent == "ELSE" && pos < input.size()) {
+                size_t savedPos = pos;
+                int savedCol = col;
+                // Look ahead for 'IF'
+                while (pos < input.size() && isspace(input[pos])) {
+                    if (input[pos] == '\n') {
+                        line++;
+                        col = 1;
+                    }
+                    else {
+                        col++;
+                    }
+                    pos++;
+                }
+                std::string nextIdent;
+                while (pos < input.size() && (isalnum(input[pos]) || input[pos] == '_')) {
+                    nextIdent += input[pos];
+                    pos++;
+                    col++;
+                }
+                std::string upperNextIdent = nextIdent;
+                for (auto& c : upperNextIdent) c = toupper(c);
+                if (upperNextIdent == "IF") {
+                    return Token{ TokenType::KEYWORD_ELSE_IF, "ELSE IF", line, col - (int)nextIdent.size() - 5 };
+                }
+                else {
+                    // Not 'ELSE IF', rollback and return 'ELSE'
+                    pos = savedPos;
+                    col = savedCol;
+                    return Token{ TokenType::KEYWORD_ELSE, "ELSE", line, col - (int)ident.size() };
+                }
+            }
+
             // Check if it's a keyword
             if (keywords.find(upperIdent) != keywords.end()) {
                 return Token{ keywords.at(upperIdent), ident, line, static_cast<int>(col - ident.size()) };
@@ -221,4 +257,7 @@ Token Lexer::getNextToken() {
         // If we reach here, it's an unknown character
         throw std::runtime_error(std::string("Unknown character: ") + current);
     }
+
+    // Return EOF token if end of input is reached
+    return Token{ TokenType::EOF_TOKEN, "", line, col };
 }

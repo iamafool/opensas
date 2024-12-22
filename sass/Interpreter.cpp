@@ -35,8 +35,8 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto proc = dynamic_cast<ProcNode*>(node)) {
         executeProc(proc);
     }
-    else if (auto ifElse = dynamic_cast<IfElseNode*>(node)) {
-        executeIfElse(ifElse);
+    else if (auto ifElseIf = dynamic_cast<IfElseIfNode*>(node)) {
+        executeIfElse(ifElseIf);
     }
     else {
         // Handle other statements
@@ -723,7 +723,8 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     }
 }
 
-void Interpreter::executeIfElse(IfElseNode* node) {
+void Interpreter::executeIfElse(IfElseIfNode* node) {
+    // Evaluate primary IF condition
     Value cond = evaluate(node->condition.get());
     double d = toNumber(cond);
     logLogger.info("Evaluating IF condition: {}", d);
@@ -731,19 +732,58 @@ void Interpreter::executeIfElse(IfElseNode* node) {
     if (d != 0.0) { // Non-zero is true
         logLogger.info("Condition is TRUE. Executing THEN statements.");
         for (const auto& stmt : node->thenStatements) {
-            execute(stmt.get());
-        }
-    }
-    else { // Zero is false
-        if (!node->elseStatements.empty()) {
-            logLogger.info("Condition is FALSE. Executing ELSE statements.");
-            for (const auto& stmt : node->elseStatements) {
+            if (auto block = dynamic_cast<BlockNode*>(stmt.get())) {
+                executeBlock(block);
+            }
+            else {
                 execute(stmt.get());
             }
         }
-        else {
-            logLogger.info("Condition is FALSE. No ELSE statements to execute.");
+        return;
+    }
+
+    // Iterate through ELSE IF branches
+    for (const auto& branch : node->elseIfBranches) {
+        Value elseIfCond = evaluate(branch.first.get());
+        double elseIfD = toNumber(elseIfCond);
+        logLogger.info("Evaluating ELSE IF condition: {}", elseIfD);
+
+        if (elseIfD != 0.0) { // Non-zero is true
+            logLogger.info("ELSE IF condition is TRUE. Executing ELSE IF statements.");
+            for (const auto& stmt : branch.second) {
+                if (auto block = dynamic_cast<BlockNode*>(stmt.get())) {
+                    executeBlock(block);
+                }
+                else {
+                    execute(stmt.get());
+                }
+            }
+            return;
         }
     }
+
+    // Execute ELSE statements if no conditions were true
+    if (!node->elseStatements.empty()) {
+        logLogger.info("All conditions FALSE. Executing ELSE statements.");
+        for (const auto& stmt : node->elseStatements) {
+            if (auto block = dynamic_cast<BlockNode*>(stmt.get())) {
+                executeBlock(block);
+            }
+            else {
+                execute(stmt.get());
+            }
+        }
+    }
+    else {
+        logLogger.info("All conditions FALSE. No ELSE statements to execute.");
+    }
 }
+
+
+void Interpreter::executeBlock(BlockNode* node) {
+    for (const auto& stmt : node->statements) {
+        execute(stmt.get());
+    }
+}
+
 

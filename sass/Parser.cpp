@@ -94,7 +94,11 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
         case TokenType::IDENTIFIER:
             return parseAssignment();
         case TokenType::KEYWORD_IF:
-            return parseIfElse(); // Updated to handle IF-ELSE
+            return parseIfElseIf(); // Updated to handle IF-ELSE IF
+        case TokenType::KEYWORD_ELSE:
+            throw std::runtime_error("Unexpected 'ELSE' without preceding 'IF'.");
+        case TokenType::KEYWORD_ELSE_IF:
+            throw std::runtime_error("Unexpected 'ELSE IF' without preceding 'IF'.");
         case TokenType::KEYWORD_OUTPUT:
             return parseOutput();
         default:
@@ -536,3 +540,56 @@ std::unique_ptr<ASTNode> Parser::parseIfElse() {
     return node;
 }
 
+
+std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
+    // Parse the primary IF condition
+    auto node = std::make_unique<IfElseIfNode>();
+    consume(TokenType::KEYWORD_IF, "Expected 'if'");
+    node->condition = parseExpression();
+    consume(TokenType::KEYWORD_THEN, "Expected 'then' after condition");
+
+    // Parse 'then' statements
+    // For simplicity, assume a single statement; can be extended to handle blocks
+    auto stmt = parseStatement();
+    if (stmt) node->thenStatements.push_back(std::move(stmt));
+
+    // Handle multiple 'ELSE IF' branches
+    while (peek().type == TokenType::KEYWORD_ELSE_IF) {
+        consume(TokenType::KEYWORD_ELSE_IF, "Expected 'else if'");
+        std::unique_ptr<ASTNode> elseIfCondition = parseExpression();
+        consume(TokenType::KEYWORD_THEN, "Expected 'then' after 'else if' condition");
+
+        std::vector<std::unique_ptr<ASTNode>> elseIfStmts;
+        auto elseIfStmt = parseStatement();
+        if (elseIfStmt) elseIfStmts.push_back(std::move(elseIfStmt));
+
+        node->elseIfBranches.emplace_back(std::move(elseIfCondition), std::move(elseIfStmts));
+    }
+
+    // Handle 'ELSE' branch
+    if (peek().type == TokenType::KEYWORD_ELSE) {
+        consume(TokenType::KEYWORD_ELSE, "Expected 'else'");
+        auto elseStmt = parseStatement();
+        if (elseStmt) node->elseStatements.push_back(std::move(elseStmt));
+    }
+
+    return node;
+}
+
+std::unique_ptr<ASTNode> Parser::parseBlock() {
+    consume(TokenType::KEYWORD_DO, "Expected 'do' to start a block");
+    std::vector<std::unique_ptr<ASTNode>> statements;
+    while (peek().type != TokenType::KEYWORD_ENDDO && peek().type != TokenType::EOF_TOKEN) {
+        auto stmt = parseStatement();
+        if (stmt) statements.push_back(std::move(stmt));
+    }
+    consume(TokenType::KEYWORD_ENDDO, "Expected 'enddo' to close the block");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'enddo'");
+
+    // Create a block node or return the list of statements
+    // For simplicity, return a BlockNode if defined, or handle appropriately
+    // Assuming BlockNode is defined:
+    auto block = std::make_unique<BlockNode>();
+    block->statements = std::move(statements);
+    return block;
+}

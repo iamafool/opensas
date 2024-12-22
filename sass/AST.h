@@ -156,4 +156,21 @@ public:
     std::vector<std::unique_ptr<ASTNode>> elseStatements;
 };
 
+// Represents an IF-ELSE IF-ELSE statement
+class IfElseIfNode : public ASTNode {
+public:
+    std::unique_ptr<ASTNode> condition;
+    std::vector<std::unique_ptr<ASTNode>> thenStatements;
+    // List of ELSE IF branches
+    std::vector<std::pair<std::unique_ptr<ASTNode>, std::vector<std::unique_ptr<ASTNode>>>> elseIfBranches;
+    // ELSE branch
+    std::vector<std::unique_ptr<ASTNode>> elseStatements;
+};
+
+// Represents a block of statements: do ... end;
+class BlockNode : public ASTNode {
+public:
+    std::vector<std::unique_ptr<ASTNode>> statements;
+};
+
 #endif // AST_H
