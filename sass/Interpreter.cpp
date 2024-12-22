@@ -905,9 +905,12 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
         return std::sqrt(argNum);
     }
     else if (func == "abs") {
-        Value argVal = evaluate(node->arguments[0].get());
-        double argNum = toNumber(argVal);
-        return std::abs(argNum);
+        // abs(number)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("abs function expects 1 argument.");
+        }
+        double num = toNumber(evaluate(node->arguments[0].get()));
+        return std::abs(num);
     }
     else if (func == "log") {
         Value argVal = evaluate(node->arguments[0].get());
@@ -919,6 +922,55 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
         }
         return std::log(argNum);
     }
+    else if (func == "ceil") {
+        // ceil(number)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("ceil function expects 1 argument.");
+        }
+        double num = toNumber(evaluate(node->arguments[0].get()));
+        return std::ceil(num);
+        }
+    else if (func == "floor") {
+            // floor(number)
+            if (node->arguments.size() != 1) {
+                throw std::runtime_error("floor function expects 1 argument.");
+            }
+            double num = toNumber(evaluate(node->arguments[0].get()));
+            return std::floor(num);
+            }
+    else if (func == "round") {
+                // round(number, decimal_places)
+                if (node->arguments.size() < 1 || node->arguments.size() > 2) {
+                    throw std::runtime_error("round function expects 1 or 2 arguments.");
+                }
+                double num = toNumber(evaluate(node->arguments[0].get()));
+                int decimal = 0;
+                if (node->arguments.size() == 2) {
+                    decimal = static_cast<int>(toNumber(evaluate(node->arguments[1].get())));
+                }
+                double factor = std::pow(10.0, decimal);
+                return std::round(num * factor) / factor;
+                }
+    else if (func == "exp") {
+                    // exp(number)
+                    if (node->arguments.size() != 1) {
+                        throw std::runtime_error("exp function expects 1 argument.");
+                    }
+                    double num = toNumber(evaluate(node->arguments[0].get()));
+                    return std::exp(num);
+                    }
+    else if (func == "log10") {
+                        // log10(number)
+                        if (node->arguments.size() != 1) {
+                            throw std::runtime_error("log10 function expects 1 argument.");
+                        }
+                        double num = toNumber(evaluate(node->arguments[0].get()));
+                        if (num <= 0.0) {
+                            throw std::runtime_error("log10 function argument must be positive.");
+                        }
+                        return std::log10(num);
+                        }
+
     else {
         throw std::runtime_error("Unsupported function: " + func);
     }
