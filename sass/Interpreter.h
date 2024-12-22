@@ -49,6 +49,7 @@ private:
     void setVariable(const std::string& varName, const Value& val);
 
     Value evaluate(ASTNode *node);
+    Value evaluateFunctionCall(FunctionCallNode* node); // New method
 };
 
 #endif // INTERPRETER_H

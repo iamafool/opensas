@@ -418,15 +418,11 @@ void Interpreter::setVariable(const std::string& varName, const Value& val) {
 
 // Evaluate an expression node
 Value Interpreter::evaluate(ASTNode *node) {
-    if (auto lit = dynamic_cast<LiteralNode*>(node)) {
-        // Try to parse as number
-        try {
-            double d = std::stod(lit->value);
-            return d;
-        }
-        catch (...) {
-            return lit->value;
-        }
+    if (auto numNode = dynamic_cast<NumberNode*>(node)) {
+        return numNode->value;
+    }
+    else if (auto strNode = dynamic_cast<StringNode*>(node)) {
+        return strNode->value;
     }
     else if (auto var = dynamic_cast<VariableNode*>(node)) {
         auto it = env.variables.find(var->varName);
@@ -440,28 +436,7 @@ Value Interpreter::evaluate(ASTNode *node) {
         }
     }
     else if (auto funcCall = dynamic_cast<FunctionCallNode*>(node)) {
-        Value argVal = evaluate(funcCall->argument.get());
-        double argNum = toNumber(argVal);
-        if (funcCall->funcName == "sqrt") {
-            if (argNum < 0) {
-                logLogger.warn("sqrt() received a negative value. Returning NaN.");
-                return std::nan("");
-            }
-            return std::sqrt(argNum);
-        }
-        else if (funcCall->funcName == "abs") {
-            return std::abs(argNum);
-        }
-        else if (funcCall->funcName == "log") {
-            if (argNum <= 0) {
-                logLogger.warn("log() received a non-positive value. Returning NaN.");
-                return std::nan("");
-            }
-            return std::log(argNum);
-        }
-        else {
-            throw std::runtime_error("Unsupported function: " + funcCall->funcName);
-        }
+        return evaluateFunctionCall(funcCall);
     }
     else if (auto bin = dynamic_cast<BinaryOpNode*>(node)) {
         Value leftVal = evaluate(bin->left.get());
@@ -786,4 +761,121 @@ void Interpreter::executeBlock(BlockNode* node) {
     }
 }
 
+Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
+    std::string func = node->functionName;
+    // Convert function name to lowercase for case-insensitive matching
+    std::transform(func.begin(), func.end(), func.begin(), ::tolower);
+
+    if (func == "substr") {
+        // substr(string, position, length)
+        if (node->arguments.size() < 2 || node->arguments.size() > 3) {
+            throw std::runtime_error("substr function expects 2 or 3 arguments.");
+        }
+        std::string str = std::get<std::string>(evaluate(node->arguments[0].get()));
+        double pos = toNumber(evaluate(node->arguments[1].get()));
+        int position = static_cast<int>(pos) - 1; // SAS substr is 1-based
+        int length = (node->arguments.size() == 3) ? static_cast<int>(toNumber(evaluate(node->arguments[2].get()))) : str.length() - position;
+        if (position < 0 || position >= static_cast<int>(str.length())) {
+            return std::string(""); // Out of bounds
+        }
+        if (position + length > static_cast<int>(str.length())) {
+            length = str.length() - position;
+        }
+        return str.substr(position, length);
+    }
+    else if (func == "trim") {
+        // trim(string)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("trim function expects 1 argument.");
+        }
+        std::string str = std::get<std::string>(evaluate(node->arguments[0].get()));
+        // Remove trailing whitespace
+        size_t endpos = str.find_last_not_of(" \t\r\n");
+        if (std::string::npos != endpos) {
+            str = str.substr(0, endpos + 1);
+        }
+        else {
+            str.clear(); // All spaces
+        }
+        return str;
+    }
+    else if (func == "left") {
+        // left(string)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("left function expects 1 argument.");
+        }
+        std::string str = std::get<std::string>(evaluate(node->arguments[0].get()));
+        // Remove leading whitespace
+        size_t startpos = str.find_first_not_of(" \t\r\n");
+        if (std::string::npos != startpos) {
+            str = str.substr(startpos);
+        }
+        else {
+            str.clear(); // All spaces
+        }
+        return str;
+    }
+    else if (func == "right") {
+        // right(string)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("right function expects 1 argument.");
+        }
+        std::string str = std::get<std::string>(evaluate(node->arguments[0].get()));
+        // Remove trailing whitespace
+        size_t endpos = str.find_last_not_of(" \t\r\n");
+        if (std::string::npos != endpos) {
+            str = str.substr(0, endpos + 1);
+        }
+        else {
+            str.clear(); // All spaces
+        }
+        return str;
+    }
+    else if (func == "upcase") {
+        // upcase(string)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("upcase function expects 1 argument.");
+        }
+        std::string str = std::get<std::string>(evaluate(node->arguments[0].get()));
+        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+        return str;
+    }
+    else if (func == "lowcase") {
+        // lowcase(string)
+        if (node->arguments.size() != 1) {
+            throw std::runtime_error("lowcase function expects 1 argument.");
+        }
+        std::string str = std::get<std::string>(evaluate(node->arguments[0].get()));
+        std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+        return str;
+    }
+    else if (func == "sqrt") {
+        Value argVal = evaluate(node->arguments[0].get());
+        double argNum = toNumber(argVal);
+
+        if (argNum < 0) {
+            logLogger.warn("sqrt() received a negative value. Returning NaN.");
+            return std::nan("");
+        }
+        return std::sqrt(argNum);
+    }
+    else if (func == "abs") {
+        Value argVal = evaluate(node->arguments[0].get());
+        double argNum = toNumber(argVal);
+        return std::abs(argNum);
+    }
+    else if (func == "log") {
+        Value argVal = evaluate(node->arguments[0].get());
+        double argNum = toNumber(argVal);
+
+        if (argNum <= 0) {
+            logLogger.warn("log() received a non-positive value. Returning NaN.");
+            return std::nan("");
+        }
+        return std::log(argNum);
+    }
+    else {
+        throw std::runtime_error("Unsupported function: " + func);
+    }
+}
 

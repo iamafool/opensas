@@ -275,33 +275,22 @@ std::unique_ptr<ASTNode> Parser::parseExpression(int precedence) {
 
 std::unique_ptr<ASTNode> Parser::parsePrimary() {
     Token t = peek();
-    if (t.type == TokenType::NUMBER || t.type == TokenType::STRING) {
+    if (t.type == TokenType::NUMBER) {
         advance();
-        auto node = std::make_unique<LiteralNode>();
-        node->value = t.text;
-        return node;
+        return std::make_unique<NumberNode>(std::stod(t.text));
+    }
+    else if (t.type == TokenType::STRING) {
+        advance();
+        return std::make_unique<StringNode>(t.text);
     }
     else if (t.type == TokenType::IDENTIFIER) {
         // Check if it's a function call
-        Token next = peek(1);
-        if (next.type == TokenType::LPAREN) {
-            // Function call
-            std::string funcName = t.text;
-            advance(); // Consume function name
-            consume(TokenType::LPAREN, "Expected '(' after function name");
-            auto arg = parseExpression();
-            consume(TokenType::RPAREN, "Expected ')' after function argument");
-            auto funcCall = std::make_unique<FunctionCallNode>();
-            funcCall->funcName = funcName;
-            funcCall->argument = std::move(arg);
-            return funcCall;
+        if (tokens.size() > pos + 1 && tokens[pos + 1].type == TokenType::LPAREN) {
+            return parseFunctionCall();
         }
         else {
-            // Variable reference
             advance();
-            auto node = std::make_unique<VariableNode>();
-            node->varName = t.text;
-            return node;
+            return std::make_unique<VariableNode>(t.text);
         }
     }
     else if (t.type == TokenType::LPAREN) {
@@ -311,7 +300,9 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
         return expr;
     }
     else {
-        throw std::runtime_error("Invalid expression starting with token: " + t.text);
+        std::ostringstream oss;
+        oss << "Unexpected token: " << t.text << " at line " << t.line << ", column " << t.col;
+        throw std::runtime_error(oss.str());
     }
 }
 
@@ -592,4 +583,28 @@ std::unique_ptr<ASTNode> Parser::parseBlock() {
     auto block = std::make_unique<BlockNode>();
     block->statements = std::move(statements);
     return block;
+}
+
+std::unique_ptr<ASTNode> Parser::parseFunctionCall() {
+    // Function call: function_name(arg1, arg2, ...)
+    auto funcCall = std::make_unique<FunctionCallNode>();
+    funcCall->functionName = consume(TokenType::IDENTIFIER, "Expected function name").text;
+    consume(TokenType::LPAREN, "Expected '(' after function name");
+
+    // Parse arguments
+    if (peek().type != TokenType::RPAREN) { // Handle functions with no arguments
+        while (true) {
+            auto arg = parseExpression();
+            funcCall->arguments.push_back(std::move(arg));
+            if (peek().type == TokenType::COMMA) {
+                consume(TokenType::COMMA, "Expected ',' between function arguments");
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    consume(TokenType::RPAREN, "Expected ')' after function arguments");
+    return funcCall;
 }

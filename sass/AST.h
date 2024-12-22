@@ -32,10 +32,31 @@ public:
     std::string value;  // Could differentiate numeric vs. string later
 };
 
+class NumberNode : public ASTNode {
+public:
+    double value;
+
+    // Constructor to initialize value
+    explicit NumberNode(double val) : value(val) {}
+};
+
+
+class StringNode : public ASTNode {
+public:
+    std::string value;
+
+    // Constructor to initialize value
+    explicit StringNode(std::string val) : value(val) {}
+};
+
+
 // Represents a variable reference
 class VariableNode : public ASTNode {
 public:
     std::string varName;
+
+    // Constructor to initialize value
+    explicit VariableNode(std::string varName) : varName(varName) {}
 };
 
 // Represents a binary operation: expr op expr
@@ -80,11 +101,11 @@ public:
     std::vector<std::unique_ptr<ASTNode>> statements;
 };
 
-// Represents a function call: func(expr)
+// Represents a function call: function_name(arg1, arg2, ...)
 class FunctionCallNode : public ASTNode {
 public:
-    std::string funcName;
-    std::unique_ptr<ASTNode> argument;
+    std::string functionName;
+    std::vector<std::unique_ptr<ASTNode>> arguments;
 };
 
 class ProcNode : public ASTNode {
