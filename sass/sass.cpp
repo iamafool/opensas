@@ -158,6 +158,8 @@ int main(int argc, char** argv)
                 std::cout << "  title '...' ;        - Set the title for outputs\n";
                 std::cout << "  data ... ; run;      - Define and execute a data step\n";
                 std::cout << "  proc print data=...; - Print a dataset\n";
+                std::cout << "  proc sort data=...; by var1 var2; run; - Sort a dataset\n";
+                std::cout << "  proc means data=...; var var1 var2; run; - Get means of variables\n";
                 std::cout << "  quit / exit          - Exit the interpreter\n";
                 continue;
             }

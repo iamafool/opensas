@@ -1,8 +1,13 @@
 #include "Lexer.h"
 #include <cctype>
 #include <algorithm>
+#include <stdexcept>
 
-Lexer::Lexer(const std::string &in) : input(in) {}
+Lexer::Lexer(const std::string &in) : input(in) {
+    keywords["AND"] = TokenType::AND;
+    keywords["OR"] = TokenType::OR;
+    keywords["NOT"] = TokenType::NOT;
+}
 
 char Lexer::peekChar() const {
     if (pos >= input.size()) return '\0';
@@ -86,40 +91,133 @@ Token Lexer::stringLiteral() {
 }
 
 Token Lexer::getNextToken() {
-    skipWhitespace();
-    Token token;
-    token.line = line;
-    token.col = col;
-    char c = peekChar();
-    if (c == '\0') {
-        token.type = TokenType::EOF_TOKEN;
-        return token;
-    }
+    while (pos < input.size()) {
+        char current = input[pos];
 
-    if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
-        return identifierOrKeyword();
-    }
+        // Skip whitespace
+        if (isspace(current)) {
+            if (current == '\n') {
+                line++;
+                col = 1;
+            }
+            else {
+                col++;
+            }
+            pos++;
+            continue;
+        }
 
-    if (std::isdigit(static_cast<unsigned char>(c))) {
-        return number();
-    }
+        // Handle comments
+        if (current == '*') {
+            // Skip until the end of the line
+            while (pos < input.size() && input[pos] != '\n') pos++;
+            continue;
+        }
 
-    switch (c) {
-        case '=': getChar(); token.type = TokenType::EQUALS; token.text = "="; return token;
-        case ';': getChar(); token.type = TokenType::SEMICOLON; token.text = ";"; return token;
-        case '(': getChar(); token.type = TokenType::LPAREN; token.text = "("; return token;
-        case ')': getChar(); token.type = TokenType::RPAREN; token.text = ")"; return token;
-        case ',': getChar(); token.type = TokenType::COMMA; token.text = ","; return token;
-        case '\'': return stringLiteral();
-        case '.': getChar(); token.type = TokenType::DOT; token.text = "."; return token;
-        case '+': getChar(); token.type = TokenType::PLUS; token.text = "+"; return token;
-        case '-': getChar(); token.type = TokenType::MINUS; token.text = "-"; return token;
-        case '*': getChar(); token.type = TokenType::MUL; token.text = "*"; return token;
-        case '/': getChar(); token.type = TokenType::DIV; token.text = "/"; return token;
-        default:
-            getChar();
-            token.type = TokenType::UNKNOWN;
-            token.text = std::string(1, c);
-            return token;
+        // Handle multi-character operators
+        if (current == '>' || current == '<' || current == '=' || current == '!') {
+            if (pos + 1 < input.size()) {
+                char next = input[pos + 1];
+                if ((current == '>' || current == '<') && next == '=') {
+                    pos += 2;
+                    col += 2;
+                    return Token{ current == '>' ? TokenType::GREATER_EQUAL : TokenType::LESS_EQUAL, std::string(1, current) + "=", line, col - 2 };
+                }
+                if (current == '=' && next == '=') {
+                    pos += 2;
+                    col += 2;
+                    return Token{ TokenType::EQUAL_EQUAL, "==", line, col - 2 };
+                }
+                if (current == '!' && next == '=') {
+                    pos += 2;
+                    col += 2;
+                    return Token{ TokenType::NOT_EQUAL, "!=", line, col - 2 };
+                }
+            }
+            // Single '>' or '<' or '=' or '!' if not part of multi-char operator
+            pos++;
+            col++;
+            switch (current) {
+            case '>': return Token{ TokenType::GREATER, ">", line, col - 1 };
+            case '<': return Token{ TokenType::LESS, "<", line, col - 1 };
+            case '=': return Token{ TokenType::EQUALS, "=", line, col - 1 };
+            case '!': return Token{ TokenType::NOT, "!", line, col - 1 };
+            default: break;
+            }
+        }
+
+        // Handle other single-character operators
+        if (current == '+' || current == '-' || current == '*' || current == '/' || current == '(' || current == ')' || current == ';' || current == ',') {
+            pos++;
+            col++;
+            switch (current) {
+            case '+': return Token{ TokenType::PLUS, "+", line, col - 1 };
+            case '-': return Token{ TokenType::MINUS, "-", line, col - 1 };
+            case '*': return Token{ TokenType::MUL, "*", line, col - 1 };
+            case '/': return Token{ TokenType::DIV, "/", line, col - 1 };
+            case '(': return Token{ TokenType::LPAREN, "(", line, col - 1 };
+            case ')': return Token{ TokenType::RPAREN, ")", line, col - 1 };
+            case ';': return Token{ TokenType::SEMICOLON, ";", line, col - 1 };
+            case ',': return Token{ TokenType::COMMA, ",", line, col - 1 };
+            default: break;
+            }
+        }
+
+        // Handle strings
+        if (current == '\'') {
+            pos++;
+            col++;
+            std::string str;
+            while (pos < input.size() && input[pos] != '\'') {
+                str += input[pos];
+                pos++;
+                col++;
+            }
+            if (pos == input.size()) {
+                throw std::runtime_error("Unterminated string literal");
+            }
+            pos++; // Skip closing quote
+            col++;
+            return Token{ TokenType::STRING, str, line, static_cast<int>(col - str.size() - 2) };
+        }
+
+        // Handle numbers
+        if (isdigit(current) || (current == '.' && pos + 1 < input.size() && isdigit(input[pos + 1]))) {
+            std::string num;
+            bool hasDot = false;
+            while (pos < input.size() && (isdigit(input[pos]) || input[pos] == '.')) {
+                if (input[pos] == '.') {
+                    if (hasDot) break; // Second dot, stop
+                    hasDot = true;
+                }
+                num += input[pos];
+                pos++;
+                col++;
+            }
+            return Token{ TokenType::NUMBER, num, line, static_cast<int>(col - num.size()) };
+        }
+
+        // Handle identifiers and keywords
+        if (isalpha(current) || current == '_') {
+            std::string ident;
+            while (pos < input.size() && (isalnum(input[pos]) || input[pos] == '_')) {
+                ident += input[pos];
+                pos++;
+                col++;
+            }
+            // Convert to uppercase for case-insensitive matching
+            std::string upperIdent = ident;
+            for (auto& c : upperIdent) c = toupper(c);
+            // Check if it's a keyword
+            if (keywords.find(upperIdent) != keywords.end()) {
+                return Token{ keywords.at(upperIdent), ident, line, static_cast<int>(col - ident.size()) };
+            }
+            else {
+                return Token{ TokenType::IDENTIFIER, ident, line, static_cast<int>(col - ident.size()) };
+            }
+        }
+
+        // If we reach here, it's an unknown character
+        throw std::runtime_error(std::string("Unknown character: ") + current);
     }
 }

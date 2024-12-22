@@ -2,6 +2,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <cmath>
+#include <algorithm>
+#include <iomanip>
 
 // Execute the entire program
 void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
@@ -9,7 +11,7 @@ void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
         try {
             execute(stmt.get());
         }
-        catch (const std::runtime_error& e) {
+        catch (const std::runtime_error &e) {
             logLogger.error("Execution error: {}", e.what());
             // Continue with the next statement
         }
@@ -71,7 +73,7 @@ void Interpreter::executeDataStep(DataStepNode *node) {
     try {
         input = env.getOrCreateDataset(inputLibref, inputDataset);
     }
-    catch (const std::runtime_error& e) {
+    catch (const std::runtime_error &e) {
         logLogger.error(e.what());
         return;
     }
@@ -91,15 +93,42 @@ void Interpreter::executeDataStep(DataStepNode *node) {
     logLogger.info("Input dataset '{}' has {} observations.", node->inputDataSet, input->rows.size());
     logLogger.info("Output dataset '{}' will store results.", node->outputDataSet);
 
+    // Variables to control variable retention
+    std::vector<std::string> dropVars;
+    std::vector<std::string> keepVars;
+    std::vector<std::string> retainVars;
+
+    bool hasDrop = false;
+    bool hasKeep = false;
+    bool hasRetain = false;
+
+
     // Execute each row in the input dataset
     for (const auto &row : input->rows) {
         env.currentRow = row; // Set the current row for processing
 
+        // Apply RETAIN variables: retain their values across iterations
+        if (hasRetain) {
+            for (const auto& var : retainVars) {
+                if (env.variables.find(var) != env.variables.end()) {
+                    env.currentRow.columns[var] = env.variables[var];
+                }
+            }
+        }
+
         // Flag to determine if the row should be output
         bool shouldOutput = false;
 
+        // Temporary variables to track DROP/KEEP
+        dropVars.clear();
+        keepVars.clear();
+        retainVars.clear();
+        hasDrop = false;
+        hasKeep = false;
+        hasRetain = false;
+
         // Execute each statement in the DATA step
-        for (const auto& stmt : node->statements) {
+        for (const auto &stmt : node->statements) {
             if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
                 executeAssignment(assign);
             }
@@ -110,9 +139,73 @@ void Interpreter::executeDataStep(DataStepNode *node) {
                 executeOutput(out);
                 shouldOutput = true;
             }
+            else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
+                executeDrop(drop);
+                hasDrop = true;
+            }
+            else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
+                executeKeep(keep);
+                hasKeep = true;
+            }
+            else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
+                executeRetain(retain);
+                hasRetain = true;
+            }
+            else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
+                executeArray(array);
+            }
+            else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
+                executeDo(doNode);
+            }
             else {
                 // Handle other DATA step statements if needed
                 throw std::runtime_error("Unsupported statement in DATA step.");
+            }
+        }
+
+        // Apply DROP and KEEP rules
+        if (hasDrop && hasKeep) {
+            // In SAS, if both DROP and KEEP are specified, KEEP takes precedence
+            // Keep only the variables specified in KEEP
+            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
+                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
+                    it = env.currentRow.columns.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
+        }
+        else if (hasKeep) {
+            // Keep only the variables specified in KEEP
+            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
+                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
+                    it = env.currentRow.columns.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
+        }
+        else if (hasDrop) {
+            // Drop the variables specified in DROP
+            for (const auto& var : dropVars) {
+                env.currentRow.columns.erase(var);
+            }
+        }
+
+        // Apply RETAIN variables: store their values for the next iteration
+        if (hasRetain) {
+            for (const auto& var : retainVars) {
+                if (env.currentRow.columns.find(var) != env.currentRow.columns.end()) {
+                    env.variables[var] = env.currentRow.columns[var];
+                }
+                else {
+                    // If variable not present, retain existing value
+                    if (env.variables.find(var) != env.variables.end()) {
+                        env.currentRow.columns[var] = env.variables[var];
+                    }
+                }
             }
         }
 
@@ -131,10 +224,31 @@ void Interpreter::executeDataStep(DataStepNode *node) {
     if (!env.title.empty()) {
         lstLogger.info("Title: {}", env.title);
     }
-    lstLogger.info("OBS\tX");
+ 
+    // Print column headers
+    std::string header;
+    for (size_t i = 0; i < output->columnOrder.size(); ++i) {
+        header += output->columnOrder[i];
+        if (i < output->columnOrder.size() - 1) header += "\t";
+    }
+    lstLogger.info("{}", header);
+
+    // Print rows
     int obs = 1;
     for (const auto &row : output->rows) {
-        lstLogger.info("{}\t{}", obs++, toString(row.columns.at("x")));
+        std::string rowStr = std::to_string(obs++) + "\t";
+        for (size_t i = 0; i < output->columnOrder.size(); ++i) {
+            const std::string &col = output->columnOrder[i];
+            auto it = row.columns.find(col);
+            if (it != row.columns.end()) {
+                rowStr += toString(it->second);
+            }
+            else {
+                rowStr += ".";
+            }
+            if (i < output->columnOrder.size() - 1) rowStr += "\t";
+        }
+        lstLogger.info("{}", rowStr);
     }
 }
 
@@ -188,11 +302,8 @@ void Interpreter::executeLibname(LibnameNode* node) {
     env.setLibref(node->libref, node->path);
     logLogger.info("Libname assigned: {} = '{}'", node->libref, node->path);
 
-    // Optionally, load existing datasets from the path
-    // For demonstration, let's assume the path contains CSV files named as datasets
-    // e.g., 'in.csv' corresponds to 'libref.in'
-
-    // Example: Load 'in.csv' as 'mylib.in'
+    // Load multiple datasets if required
+    // For demonstration, let's load 'in.csv' as 'mylib.in'
     std::string csvPath = node->path + "\\" + "in.csv"; // Adjust path separator as needed
     try {
         env.loadDatasetFromCSV(node->libref, "in", csvPath);
@@ -208,6 +319,60 @@ void Interpreter::executeTitle(TitleNode* node) {
     env.setTitle(node->title);
     logLogger.info("Title set to: '{}'", node->title);
     lstLogger.info("Title: {}", env.title);
+}
+
+// Execute a PROC step
+void Interpreter::executeProc(ProcNode* node) {
+    if (node->procName == "print") {
+        logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
+        try {
+            auto dataset = env.getOrCreateDataset("", node->datasetName);
+            lstLogger.info("PROC PRINT Results for Dataset '{}':", dataset->name);
+            if (!env.title.empty()) {
+                lstLogger.info("Title: {}", env.title);
+            }
+
+            // Print column headers
+            std::string header;
+            for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
+                header += dataset->columnOrder[i];
+                if (i < dataset->columnOrder.size() - 1) header += "\t";
+            }
+            lstLogger.info("{}", header);
+
+            // Print rows
+            int obs = 1;
+            for (const auto& row : dataset->rows) {
+                std::string rowStr = std::to_string(obs++) + "\t";
+                for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
+                    const std::string& col = dataset->columnOrder[i];
+                    auto it = row.columns.find(col);
+                    if (it != row.columns.end()) {
+                        rowStr += toString(it->second);
+                    }
+                    else {
+                        rowStr += ".";
+                    }
+                    if (i < dataset->columnOrder.size() - 1) rowStr += "\t";
+                }
+                lstLogger.info("{}", rowStr);
+            }
+        }
+        catch (const std::runtime_error& e) {
+            logLogger.error("PROC PRINT failed: {}", e.what());
+        }
+    }
+    else if (node->procName == "sort") {
+        // Should not reach here; PROC SORT is handled as ProcSortNode
+        throw std::runtime_error("PROC SORT should be handled as ProcSortNode");
+    }
+    else if (node->procName == "means") {
+        // Should not reach here; PROC MEANS is handled as ProcMeansNode
+        throw std::runtime_error("PROC MEANS should be handled as ProcMeansNode");
+    }
+    else {
+        logLogger.error("Unsupported PROC: {}", node->procName);
+    }
 }
 
 // Convert Value to number (double)
@@ -275,10 +440,21 @@ Value Interpreter::evaluate(ASTNode *node) {
         Value argVal = evaluate(funcCall->argument.get());
         double argNum = toNumber(argVal);
         if (funcCall->funcName == "sqrt") {
+            if (argNum < 0) {
+                logLogger.warn("sqrt() received a negative value. Returning NaN.");
+                return std::nan("");
+            }
             return std::sqrt(argNum);
         }
         else if (funcCall->funcName == "abs") {
             return std::abs(argNum);
+        }
+        else if (funcCall->funcName == "log") {
+            if (argNum <= 0) {
+                logLogger.warn("log() received a non-positive value. Returning NaN.");
+                return std::nan("");
+            }
+            return std::log(argNum);
         }
         else {
             throw std::runtime_error("Unsupported function: " + funcCall->funcName);
@@ -287,9 +463,10 @@ Value Interpreter::evaluate(ASTNode *node) {
     else if (auto bin = dynamic_cast<BinaryOpNode*>(node)) {
         Value leftVal = evaluate(bin->left.get());
         Value rightVal = evaluate(bin->right.get());
+        std::string op = bin->op;
+
         double l = toNumber(leftVal);
         double r = toNumber(rightVal);
-        std::string op = bin->op;
 
         if (op == "+") return l + r;
         else if (op == "-") return l - r;
@@ -301,7 +478,8 @@ Value Interpreter::evaluate(ASTNode *node) {
         else if (op == "<=") return (l <= r) ? 1.0 : 0.0;
         else if (op == "==") return (l == r) ? 1.0 : 0.0;
         else if (op == "!=") return (l != r) ? 1.0 : 0.0;
-        // Implement logical operators (and, or) as needed
+        else if (op == "and") return ((l != 0.0) && (r != 0.0)) ? 1.0 : 0.0;
+        else if (op == "or") return ((l != 0.0) || (r != 0.0)) ? 1.0 : 0.0;
         else {
             throw std::runtime_error("Unsupported binary operator: " + op);
         }
@@ -310,47 +488,235 @@ Value Interpreter::evaluate(ASTNode *node) {
     throw std::runtime_error("Unsupported expression type during evaluation.");
 }
 
-void Interpreter::executeProc(ProcNode* node) {
-    if (node->procName == "print") {
-        logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
-        try {
-            auto dataset = env.getOrCreateDataset("", node->datasetName);
-            lstLogger.info("PROC PRINT Results for Dataset '{}':", dataset->name);
-            if (!env.title.empty()) {
-                lstLogger.info("Title: {}", env.title);
-            }
+// Execute a DROP statement
+void Interpreter::executeDrop(DropNode* node) {
+    for (const auto& var : node->variables) {
+        env.currentRow.columns.erase(var);
+        logLogger.info("Dropped variable '{}'.", var);
+    }
+}
 
-            // Print column headers
-            std::string header;
-            for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
-                header += dataset->columnOrder[i];
-                if (i < dataset->columnOrder.size() - 1) header += "\t";
-            }
-            lstLogger.info("{}", header);
+// Execute a KEEP statement
+void Interpreter::executeKeep(KeepNode* node) {
+    // Retain only the specified variables
+    std::vector<std::string> currentVars;
+    for (const auto& varPair : env.currentRow.columns) {
+        currentVars.push_back(varPair.first);
+    }
 
-            // Print rows
-            int obs = 1;
-            for (const auto& row : dataset->rows) {
-                std::string rowStr = std::to_string(obs++) + "\t";
-                for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
-                    const std::string& col = dataset->columnOrder[i];
-                    auto it = row.columns.find(col);
-                    if (it != row.columns.end()) {
-                        rowStr += toString(it->second);
-                    }
-                    else {
-                        rowStr += ".";
-                    }
-                    if (i < dataset->columnOrder.size() - 1) rowStr += "\t";
-                }
-                lstLogger.info("{}", rowStr);
-            }
+    for (const auto& var : currentVars) {
+        if (std::find(node->variables.begin(), node->variables.end(), var) == node->variables.end()) {
+            env.currentRow.columns.erase(var);
+            logLogger.info("Kept variable '{}'; other variables dropped.", var);
         }
-        catch (const std::runtime_error& e) {
-            logLogger.error("PROC PRINT failed: {}", e.what());
+    }
+}
+
+// Execute a RETAIN statement
+void Interpreter::executeRetain(RetainNode* node) {
+    for (const auto& var : node->variables) {
+        retainVars.push_back(var);
+        logLogger.info("Retained variable '{}'.", var);
+    }
+}
+
+// Execute an ARRAY statement
+void Interpreter::executeArray(ArrayNode* node) {
+    arrays[node->arrayName] = node->variables;
+    logLogger.info("Declared array '{}' with variables: {}", node->arrayName,
+        [&]() -> std::string {
+            std::string s;
+            for (const auto& var : node->variables) {
+                s += var + " ";
+            }
+            return s;
+        }());
+}
+
+// Execute a DO loop
+void Interpreter::executeDo(DoNode* node) {
+    // Evaluate start and end expressions
+    Value startVal = evaluate(node->startExpr.get());
+    Value endVal = evaluate(node->endExpr.get());
+    double start = toNumber(startVal);
+    double end = toNumber(endVal);
+    double increment = 1.0; // Default increment
+
+    if (node->incrementExpr) {
+        Value incVal = evaluate(node->incrementExpr.get());
+        increment = toNumber(incVal);
+    }
+
+    logLogger.info("Starting DO loop: {} = {} to {} by {}", node->loopVar, start, end, increment);
+
+    // Initialize loop variable
+    env.currentRow.columns[node->loopVar] = start;
+
+    // Loop
+    if (increment > 0) {
+        while (env.currentRow.columns[node->loopVar].index() == 0 && std::get<double>(env.currentRow.columns[node->loopVar]) <= end) {
+            // Execute loop statements
+            for (const auto& stmt : node->statements) {
+                if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
+                    executeAssignment(assign);
+                }
+                else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
+                    executeIfThen(ifThen);
+                }
+                else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
+                    executeOutput(out);
+                }
+                else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
+                    executeDrop(drop);
+                }
+                else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
+                    executeKeep(keep);
+                }
+                else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
+                    executeRetain(retain);
+                }
+                else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
+                    executeArray(array);
+                }
+                else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
+                    executeDo(doNode);
+                }
+                else {
+                    // Handle other DATA step statements if needed
+                    throw std::runtime_error("Unsupported statement in DO loop.");
+                }
+            }
+
+            // Increment loop variable
+            double currentVal = toNumber(env.currentRow.columns[node->loopVar]);
+            currentVal += increment;
+            env.currentRow.columns[node->loopVar] = currentVal;
+        }
+    }
+    else if (increment < 0) {
+        while (env.currentRow.columns[node->loopVar].index() == 0 && std::get<double>(env.currentRow.columns[node->loopVar]) >= end) {
+            // Execute loop statements
+            for (const auto& stmt : node->statements) {
+                if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
+                    executeAssignment(assign);
+                }
+                else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
+                    executeIfThen(ifThen);
+                }
+                else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
+                    executeOutput(out);
+                }
+                else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
+                    executeDrop(drop);
+                }
+                else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
+                    executeKeep(keep);
+                }
+                else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
+                    executeRetain(retain);
+                }
+                else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
+                    executeArray(array);
+                }
+                else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
+                    executeDo(doNode);
+                }
+                else {
+                    // Handle other DATA step statements if needed
+                    throw std::runtime_error("Unsupported statement in DO loop.");
+                }
+            }
+
+            // Increment loop variable
+            double currentVal = toNumber(env.currentRow.columns[node->loopVar]);
+            currentVal += increment;
+            env.currentRow.columns[node->loopVar] = currentVal;
         }
     }
     else {
-        logLogger.error("Unsupported PROC: {}", node->procName);
+        throw std::runtime_error("DO loop increment cannot be zero.");
+    }
+
+    logLogger.info("Completed DO loop: {} reached {}", node->loopVar, env.currentRow.columns[node->loopVar].index() == 0 ? toString(env.currentRow.columns[node->loopVar]) : "unknown");
+}
+
+void Interpreter::executeProcSort(ProcSortNode* node) {
+    logLogger.info("Executing PROC SORT on dataset '{}'.", node->datasetName);
+    try {
+        auto dataset = env.getOrCreateDataset("", node->datasetName);
+        // Perform the sort based on byVariables
+        std::sort(dataset->rows.begin(), dataset->rows.end(),
+            [&](const Row& a, const Row& b) -> bool {
+                for (const auto& var : node->byVariables) {
+                    auto itA = a.columns.find(var);
+                    auto itB = b.columns.find(var);
+                    if (itA == a.columns.end() || itB == b.columns.end()) continue; // Missing variables are ignored
+                    if (std::holds_alternative<double>(itA->second) && std::holds_alternative<double>(itB->second)) {
+                        double valA = std::get<double>(itA->second);
+                        double valB = std::get<double>(itB->second);
+                        if (valA < valB) return true;
+                        if (valA > valB) return false;
+                    }
+                    else {
+                        std::string valA = std::get<std::string>(itA->second);
+                        std::string valB = std::get<std::string>(itB->second);
+                        if (valA < valB) return true;
+                        if (valA > valB) return false;
+                    }
+                    // If equal, proceed to next 'by' variable
+                }
+                return false; // All 'by' variables are equal
+            });
+
+        logLogger.info("PROC SORT completed on dataset '{}'.", node->datasetName);
+    }
+    catch (const std::runtime_error& e) {
+        logLogger.error("PROC SORT failed: {}", e.what());
     }
 }
+
+void Interpreter::executeProcMeans(ProcMeansNode* node) {
+    logLogger.info("Executing PROC MEANS on dataset '{}'.", node->datasetName);
+    try {
+        auto dataset = env.getOrCreateDataset("", node->datasetName);
+        lstLogger.info("PROC MEANS Results for Dataset '{}':", dataset->name);
+        if (!env.title.empty()) {
+            lstLogger.info("Title: {}", env.title);
+        }
+
+        // Calculate means for specified variables
+        std::unordered_map<std::string, double> sums;
+        std::unordered_map<std::string, int> counts;
+
+        for (const auto& var : node->varNames) {
+            sums[var] = 0.0;
+            counts[var] = 0;
+        }
+
+        for (const auto& row : dataset->rows) {
+            for (const auto& var : node->varNames) {
+                auto it = row.columns.find(var);
+                if (it != row.columns.end() && std::holds_alternative<double>(it->second)) {
+                    sums[var] += std::get<double>(it->second);
+                    counts[var]++;
+                }
+            }
+        }
+
+        // Print the means
+        lstLogger.info("Variable\tMean");
+        for (const auto& var : node->varNames) {
+            if (counts[var] > 0) {
+                double mean = sums[var] / counts[var];
+                lstLogger.info("{}\t{:.2f}", var, mean);
+            }
+            else {
+                lstLogger.info("{}\t.", var); // Missing values
+            }
+        }
+    }
+    catch (const std::runtime_error& e) {
+        logLogger.error("PROC MEANS failed: {}", e.what());
+    }
+}
+

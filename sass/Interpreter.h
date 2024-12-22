@@ -17,6 +17,10 @@ public:
 private:
     DataEnvironment &env;
     spdlog::logger &lstLogger;
+    // Add a member variable to hold arrays
+    std::unordered_map<std::string, std::vector<std::string>> arrays;
+    std::vector<std::string> retainVars;
+
 
     void execute(ASTNode *node);
     void executeDataStep(DataStepNode *node);
@@ -27,6 +31,14 @@ private:
     void executeLibname(LibnameNode *node);
     void executeTitle(TitleNode *node);
     void executeProc(ProcNode* node);
+    void executeDrop(DropNode* node);
+    void executeKeep(KeepNode* node);
+    void executeRetain(RetainNode* node);
+    void executeArray(ArrayNode* node);
+    void executeDo(DoNode* node);
+    void executeProcSort(ProcSortNode* node);
+    void executeProcMeans(ProcMeansNode* node);
+
 
     double toNumber(const Value &v);
     std::string toString(const Value &v);

@@ -30,9 +30,24 @@ private:
     std::unique_ptr<ASTNode> parseOptions();
     std::unique_ptr<ASTNode> parseLibname();
     std::unique_ptr<ASTNode> parseTitle();
-    std::unique_ptr<ASTNode> parseExpression();
-    std::unique_ptr<ASTNode> parsePrimary();
     std::unique_ptr<ASTNode> parseProc();
+
+    std::unique_ptr<ASTNode> parseDrop();
+
+    std::unique_ptr<ASTNode> parseKeep();
+
+    std::unique_ptr<ASTNode> parseRetain();
+
+    std::unique_ptr<ASTNode> parseArray();
+
+    std::unique_ptr<ASTNode> parseDo();
+
+    std::unique_ptr<ASTNode> parseEndDo();
+
+    // Expression parsing with precedence
+    std::unique_ptr<ASTNode> parseExpression(int precedence = 0);
+    std::unique_ptr<ASTNode> parsePrimary();
+    int getPrecedence(const std::string& op) const;
 };
 
 #endif // PARSER_H

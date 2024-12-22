@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "Token.h"
+#include <unordered_map>
 
 class Lexer {
 public:
@@ -22,6 +23,7 @@ private:
     Token identifierOrKeyword();
     Token number();
     Token stringLiteral();
+    std::unordered_map<std::string, TokenType> keywords;
 };
 
 #endif // LEXER_H

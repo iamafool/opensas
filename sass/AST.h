@@ -93,4 +93,59 @@ public:
     std::string datasetName; // e.g., proc print data=mylib.out;
     // Add more fields as needed
 };
+
+// Represents a DROP statement: drop var1 var2 ...;
+class DropNode : public ASTNode {
+public:
+    std::vector<std::string> variables;
+};
+
+// Represents a KEEP statement: keep var1 var2 ...;
+class KeepNode : public ASTNode {
+public:
+    std::vector<std::string> variables;
+};
+
+// Represents a RETAIN statement: retain var1 var2 ...;
+class RetainNode : public ASTNode {
+public:
+    std::vector<std::string> variables;
+};
+
+
+// Represents an ARRAY statement: array arr {size} var1 var2 ...;
+class ArrayNode : public ASTNode {
+public:
+    std::string arrayName;
+    int size;
+    std::vector<std::string> variables;
+};
+
+// Represents a DO loop: do <variable> = <start> to <end> by <increment>;
+class DoNode : public ASTNode {
+public:
+    std::string loopVar;
+    std::unique_ptr<ASTNode> startExpr;
+    std::unique_ptr<ASTNode> endExpr;
+    std::unique_ptr<ASTNode> incrementExpr; // Optional
+    std::vector<std::unique_ptr<ASTNode>> statements;
+};
+
+// Represents an ENDDO statement
+class EndDoNode : public ASTNode {};
+
+// Represents a PROC SORT step: proc sort data=<dataset>; by <variables>; run;
+class ProcSortNode : public ASTNode {
+public:
+    std::string datasetName;
+    std::vector<std::string> byVariables;
+};
+
+// Represents a PROC MEANS step: proc means data=<dataset>; var <variables>; run;
+class ProcMeansNode : public ASTNode {
+public:
+    std::string datasetName;
+    std::vector<std::string> varNames;
+};
+
 #endif // AST_H
