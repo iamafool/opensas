@@ -41,6 +41,8 @@ private:
     std::unique_ptr<ASTNode> parseEndDo();
     std::unique_ptr<ASTNode> parseBlock(); // New method for parsing blocks
     std::unique_ptr<ASTNode> parseFunctionCall(); // New method
+    std::unique_ptr<ASTNode> parseMerge(); // New method
+    std::unique_ptr<ASTNode> parseBy(); // New method
 
     // Expression parsing with precedence
     std::unique_ptr<ASTNode> parseExpression(int precedence = 0);

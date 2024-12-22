@@ -201,4 +201,16 @@ public:
     std::vector<std::unique_ptr<ASTNode>> statements;
 };
 
+// Represents a BY statement: by var1 var2 ...;
+class ByStatementNode : public ASTNode {
+public:
+    std::vector<std::string> variables;
+};
+
+// Represents a MERGE statement: merge dataset1 dataset2 ...;
+class MergeStatementNode : public ASTNode {
+public:
+    std::vector<std::string> datasets;
+};
+
 #endif // AST_H

@@ -41,6 +41,12 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto arrayNode = dynamic_cast<ArrayNode*>(node)) {
         executeArray(arrayNode);
     }
+    else if (auto mergeNode = dynamic_cast<MergeStatementNode*>(node)) {
+        executeMerge(mergeNode);
+    }
+    else if (auto byNode = dynamic_cast<ByStatementNode*>(node)) {
+        executeBy(byNode);
+    }
     else {
         // Handle other statements
         // For now, ignore unknown statements or throw an error
@@ -108,6 +114,23 @@ void Interpreter::executeDataStep(DataStepNode *node) {
     bool hasKeep = false;
     bool hasRetain = false;
 
+    // Check if a MERGE statement exists in the data step
+    bool hasMerge = false;
+    MergeStatementNode* mergeNode = nullptr;
+    for (const auto& stmt : node->statements) {
+        if (auto m = dynamic_cast<MergeStatementNode*>(stmt.get())) {
+            hasMerge = true;
+            mergeNode = m;
+            break;
+        }
+    }
+
+    if (hasMerge && mergeNode) {
+        // Handle MERGE logic
+        executeMerge(mergeNode);
+        // Remove MERGE statement from the data step to avoid re-processing
+        // Implement this as per your data structure
+    }
 
     // Execute each row in the input dataset
     for (const auto &row : input->rows) {
@@ -1056,3 +1079,88 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
     }
 }
 
+void Interpreter::executeMerge(MergeStatementNode* node) {
+    logLogger.info("Executing MERGE statement with datasets:");
+    for (const auto& ds : node->datasets) {
+        logLogger.info(" - {}", ds);
+    }
+
+    // Ensure all datasets exist
+    std::vector<DataSet*> mergeDatasets;
+    for (const auto& dsName : node->datasets) {
+        DataSet* ds = env.getOrCreateDataset(dsName, dsName).get();
+        if (!ds) {
+            throw std::runtime_error("Dataset not found for MERGE: " + dsName);
+        }
+        mergeDatasets.push_back(ds);
+    }
+
+    // Check if BY statement has been specified
+    if (byVariables.empty()) {
+        throw std::runtime_error("MERGE statement requires a preceding BY statement.");
+    }
+
+    // Ensure all datasets are sorted by BY variables
+    for (auto ds : mergeDatasets) {
+        // Implement sorting if not already sorted
+        // Placeholder: Assume datasets are pre-sorted
+        logLogger.info("Dataset '{}' is assumed to be sorted by BY variables.", ds->name);
+    }
+
+    // Initialize iterators for each dataset
+    std::vector<size_t> iterators(mergeDatasets.size(), 0);
+
+    // Determine the number of observations in each dataset
+    size_t numRows = 0;
+    for (auto ds : mergeDatasets) {
+        numRows = std::max(numRows, ds->rows.size());
+    }
+
+    // Iterate through datasets and merge rows based on BY variables
+    for (size_t i = 0; i < numRows; ++i) {
+        Row mergedRow;
+
+        for (size_t j = 0; j < mergeDatasets.size(); ++j) {
+            if (i < mergeDatasets[j]->rows.size()) {
+                const Row& currentRow = mergeDatasets[j]->rows[i];
+                for (const auto& col : currentRow.columns) {
+                    // Avoid overwriting existing columns
+                    if (mergedRow.columns.find(col.first) == mergedRow.columns.end()) {
+                        mergedRow.columns[col.first] = col.second;
+                    }
+                    else {
+                        // Handle column name conflicts, possibly by prefixing with dataset name
+                        std::string newColName = mergeDatasets[j]->name + "_" + col.first;
+                        mergedRow.columns[newColName] = col.second;
+                    }
+                }
+            }
+            else {
+                // Handle datasets with fewer rows by filling missing values
+                // Optionally, implement logic to handle missing observations
+                logLogger.warn("Dataset '{}' has fewer rows than others. Filling missing values.", mergeDatasets[j]->name);
+            }
+        }
+
+        // Append the merged row to the output dataset
+        // TODO auto outputDataSet = env.getOrCreateDataset(node->dataSetName, node->dataSetName);
+        // TODO outputDataSet->rows.push_back(mergedRow);
+    }
+
+    // TODO logLogger.info("MERGE statement executed successfully. Output dataset '{}' has {} observations.",
+        // TODO node->dataSetName, env.getOrCreateDataset(node->dataSetName, node->dataSetName)->rows.size());
+}
+
+
+void Interpreter::executeBy(ByStatementNode* node) {
+    logLogger.info("Executing BY statement with variables:");
+    for (const auto& var : node->variables) {
+        logLogger.info(" - {}", var);
+    }
+
+    // Store the BY variables in the interpreter's context
+    byVariables = node->variables;
+
+    // Ensure that the BY variables are present in all datasets to be merged
+    // This can be implemented as needed
+}

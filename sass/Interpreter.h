@@ -21,6 +21,8 @@ private:
     std::unordered_map<std::string, std::vector<std::string>> arrays;
     std::vector<std::string> retainVars;
 
+    // Current BY variables and their order
+    std::vector<std::string> byVariables;
 
     void execute(ASTNode *node);
     void executeDataStep(DataStepNode *node);
@@ -40,6 +42,8 @@ private:
     void executeProcSort(ProcSortNode* node);
     void executeProcMeans(ProcMeansNode* node);
     void executeBlock(BlockNode* node);
+    void executeMerge(MergeStatementNode* node);
+    void executeBy(ByStatementNode* node);
 
     double toNumber(const Value &v);
     std::string toString(const Value &v);

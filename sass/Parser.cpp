@@ -87,6 +87,10 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
             return parseRetain();
         case TokenType::KEYWORD_ARRAY:
             return parseArray();
+        case TokenType::KEYWORD_MERGE:
+            return parseMerge(); // Handle MERGE statements
+        case TokenType::KEYWORD_BY:
+            return parseBy(); // Handle BY statements
         case TokenType::KEYWORD_DO:
             return parseDo();
         case TokenType::KEYWORD_ENDDO:
@@ -625,4 +629,36 @@ std::unique_ptr<ASTNode> Parser::parseFunctionCall() {
 
     consume(TokenType::RPAREN, "Expected ')' after function arguments");
     return funcCall;
+}
+
+std::unique_ptr<ASTNode> Parser::parseMerge() {
+    // MERGE dataset1 dataset2 ...;
+    auto mergeNode = std::make_unique<MergeStatementNode>();
+    consume(TokenType::KEYWORD_MERGE, "Expected 'MERGE' keyword");
+
+    // Parse dataset names
+    while (peek().type == TokenType::IDENTIFIER) {
+        mergeNode->datasets.push_back(consume(TokenType::IDENTIFIER, "Expected dataset name in MERGE statement").text);
+    }
+
+    // Expect semicolon
+    consume(TokenType::SEMICOLON, "Expected ';' after MERGE statement");
+
+    return mergeNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseBy() {
+    // BY var1 var2 ...;
+    auto byNode = std::make_unique<ByStatementNode>();
+    consume(TokenType::KEYWORD_BY, "Expected 'BY' keyword");
+
+    // Parse variable names
+    while (peek().type == TokenType::IDENTIFIER) {
+        byNode->variables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in BY statement").text);
+    }
+
+    // Expect semicolon
+    consume(TokenType::SEMICOLON, "Expected ';' after BY statement");
+
+    return byNode;
 }

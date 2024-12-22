@@ -10,6 +10,9 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["ELSE"] = TokenType::KEYWORD_ELSE;
     keywords["ELSE IF"] = TokenType::KEYWORD_ELSE_IF;
     keywords["ARRAY"] = TokenType::KEYWORD_ARRAY;
+    keywords["MERGE"] = TokenType::KEYWORD_MERGE;
+    keywords["BY"] = TokenType::KEYWORD_BY;
+
 }
 
 char Lexer::peekChar() const {
