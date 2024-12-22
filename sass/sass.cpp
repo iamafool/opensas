@@ -1,7 +1,6 @@
 ﻿#include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
-#include "Token.h"
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -39,10 +38,7 @@ void runSasCode(const std::string &sasCode, Interpreter &interpreter, bool inter
     Parser parser(tokens);
     std::unique_ptr<ProgramNode> program;
     try {
-        program = parser.parse();
-        if (!program) {
-            throw std::runtime_error("Failed to parse program.");
-        }
+        program = parser.parseProgram();
     }
     catch (const std::runtime_error &e) {
         interpreter.logLogger.error("Parsing failed: {}", e.what());
@@ -153,6 +149,17 @@ int main(int argc, char** argv)
             // If user enters "quit" or "exit"
             if (line == "quit" || line == "exit") {
                 break;
+            }
+
+            if (line == "help" || line == "?") {
+                std::cout << "Supported Commands:\n";
+                std::cout << "  options ... ;       - Set global options\n";
+                std::cout << "  libname ... ;        - Assign a library reference\n";
+                std::cout << "  title '...' ;        - Set the title for outputs\n";
+                std::cout << "  data ... ; run;      - Define and execute a data step\n";
+                std::cout << "  proc print data=...; - Print a dataset\n";
+                std::cout << "  quit / exit          - Exit the interpreter\n";
+                continue;
             }
 
             // Handle comments: skip lines starting with '*', or remove inline comments

@@ -6,7 +6,13 @@
 // Execute the entire program
 void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
     for (const auto &stmt : program->statements) {
-        execute(stmt.get());
+        try {
+            execute(stmt.get());
+        }
+        catch (const std::runtime_error& e) {
+            logLogger.error("Execution error: {}", e.what());
+            // Continue with the next statement
+        }
     }
 }
 
@@ -24,6 +30,9 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto title = dynamic_cast<TitleNode*>(node)) {
         executeTitle(title);
     }
+    else if (auto proc = dynamic_cast<ProcNode*>(node)) {
+        executeProc(proc);
+    }
     else {
         // Handle other statements
         // For now, ignore unknown statements or throw an error
@@ -32,7 +41,7 @@ void Interpreter::execute(ASTNode *node) {
 }
 
 // Execute a DATA step
-void Interpreter::executeDataStep(DataStepNode* node) {
+void Interpreter::executeDataStep(DataStepNode *node) {
     logLogger.info("Executing DATA step: data {}; set {};", node->outputDataSet, node->inputDataSet);
 
     // Resolve output dataset name
@@ -58,9 +67,9 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     }
 
     // Check if input dataset exists
-    DataSet* input = nullptr;
+    std::shared_ptr<DataSet> input = nullptr;
     try {
-        input = &env.getOrCreateDataset(inputLibref, inputDataset);
+        input = env.getOrCreateDataset(inputLibref, inputDataset);
     }
     catch (const std::runtime_error& e) {
         logLogger.error(e.what());
@@ -68,11 +77,26 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     }
 
     // Create or get the output dataset
-    DataSet& output = env.getOrCreateDataset(outputLibref, outputDataset);
-    output.name = node->outputDataSet;
+    std::shared_ptr<DataSet> output;
+    try {
+        output = env.getOrCreateDataset(outputLibref, outputDataset);
+        output->name = node->outputDataSet;
+    }
+    catch (const std::runtime_error &e) {
+        logLogger.error(e.what());
+        return;
+    }
 
-    for (const auto& row : input->rows) {
+    // Log dataset sizes
+    logLogger.info("Input dataset '{}' has {} observations.", node->inputDataSet, input->rows.size());
+    logLogger.info("Output dataset '{}' will store results.", node->outputDataSet);
+
+    // Execute each row in the input dataset
+    for (const auto &row : input->rows) {
         env.currentRow = row; // Set the current row for processing
+
+        // Flag to determine if the row should be output
+        bool shouldOutput = false;
 
         // Execute each statement in the DATA step
         for (const auto& stmt : node->statements) {
@@ -84,6 +108,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             }
             else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
                 executeOutput(out);
+                shouldOutput = true;
             }
             else {
                 // Handle other DATA step statements if needed
@@ -91,49 +116,32 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             }
         }
 
-        // After processing the row, add to output if 'output' was called
-        // This logic can be adjusted based on how 'output' is implemented
-        // For simplicity, assume 'output' flag is set by executeOutput
-        // You can add a flag in DataEnvironment if needed
-
-        // Placeholder: Add the row to output if 'output' was called
-        // Implement flagging logic in executeOutput
+        // If 'OUTPUT' was called, add the current row to the output dataset
+        if (shouldOutput) {
+            output->addRow(env.currentRow);
+            logLogger.info("Row outputted to '{}'.", node->outputDataSet);
+        }
     }
 
     logLogger.info("DATA step '{}' executed successfully. Output dataset has {} observations.",
-        node->outputDataSet, output.rows.size());
+                   node->outputDataSet, output->rows.size());
 
-    // Retrieve options
-    std::string linesize = env.getOption("LINESIZE", "80"); // Default 80
-    std::string pagesize = env.getOption("PAGESIZE", "60"); // Default 60
-
-    lstLogger.info("LINESIZE = {}", linesize);
-    lstLogger.info("PAGESIZE = {}", pagesize);
-
-    // Convert to integers for formatting if needed
-    int ls = std::stoi(linesize);
-    int ps = std::stoi(pagesize);
-
-    // Implement logic to format output based on linesize and pagesize
-    // For simplicity, this is not fully implemented
-    // You can adjust how titles, headers, and data rows are printed based on these settings
-
+    // For demonstration, print the output dataset
     lstLogger.info("SAS Results (Dataset: {}):", node->outputDataSet);
     if (!env.title.empty()) {
         lstLogger.info("Title: {}", env.title);
     }
     lstLogger.info("OBS\tX");
     int obs = 1;
-    for (const auto& row : output.rows) {
+    for (const auto &row : output->rows) {
         lstLogger.info("{}\t{}", obs++, toString(row.columns.at("x")));
-        // Implement linesize and pagesize logic here
     }
 }
 
 // Execute an assignment statement
 void Interpreter::executeAssignment(AssignmentNode *node) {
     Value val = evaluate(node->expression.get());
-    env.setValue(node->varName, val);
+    env.setVariable(node->varName, val);
     logLogger.info("Assigned {} = {}", node->varName, toString(val));
 }
 
@@ -160,13 +168,11 @@ void Interpreter::executeIfThen(IfThenNode *node) {
 
 // Execute an OUTPUT statement
 void Interpreter::executeOutput(OutputNode *node) {
-    // For simplicity, assume 'output' adds the current row to the output dataset
-    // Implement a flag or directly add the row in executeDataStep
-    // Here, we log that 'output' was called
+    // In this implementation, 'OUTPUT' sets a flag in the DATA step execution to add the current row
+    // The actual addition to the dataset is handled in 'executeDataStep'
+    // However, to make this explicit, you can modify 'currentRow' if needed
     logLogger.info("OUTPUT statement executed. Current row will be added to the output dataset.");
-    
-    // Implement the logic in executeDataStep to add the row
-    // For demonstration, assume rows are added automatically
+    // Optionally, set a flag or manipulate 'currentRow' here
 }
 
 // Execute an OPTIONS statement
@@ -174,16 +180,6 @@ void Interpreter::executeOptions(OptionsNode* node) {
     for (const auto& opt : node->options) {
         env.setOption(opt.first, opt.second);
         logLogger.info("Set option {} = {}", opt.first, opt.second);
-
-        // Optionally, handle specific options immediately
-        if (opt.first == "LINESIZE") {
-            // For example, store it in DataEnvironment and use it in output formatting
-            // Implement usage in OutputManager if needed
-        }
-        else if (opt.first == "PAGESIZE") {
-            // Similar handling for PAGSIZE
-        }
-        // Handle more options as needed
     }
 }
 
@@ -192,8 +188,19 @@ void Interpreter::executeLibname(LibnameNode* node) {
     env.setLibref(node->libref, node->path);
     logLogger.info("Libname assigned: {} = '{}'", node->libref, node->path);
 
-    // Optionally, verify that the path exists
-    // For simplicity, not implemented here
+    // Optionally, load existing datasets from the path
+    // For demonstration, let's assume the path contains CSV files named as datasets
+    // e.g., 'in.csv' corresponds to 'libref.in'
+
+    // Example: Load 'in.csv' as 'mylib.in'
+    std::string csvPath = node->path + "\\" + "in.csv"; // Adjust path separator as needed
+    try {
+        env.loadDatasetFromCSV(node->libref, "in", csvPath);
+        logLogger.info("Loaded dataset '{}' from '{}'", node->libref + ".in", csvPath);
+    }
+    catch (const std::runtime_error &e) {
+        logLogger.error("Failed to load dataset: {}", e.what());
+    }
 }
 
 // Execute a TITLE statement
@@ -222,7 +229,11 @@ double Interpreter::toNumber(const Value &v) {
 // Convert Value to string
 std::string Interpreter::toString(const Value &v) {
     if (std::holds_alternative<double>(v)) {
-        return std::to_string(std::get<double>(v));
+        // Remove trailing zeros for cleaner output
+        std::string numStr = std::to_string(std::get<double>(v));
+        numStr.erase(numStr.find_last_not_of('0') + 1, std::string::npos);
+        if (numStr.back() == '.') numStr.pop_back();
+        return numStr;
     }
     else {
         return std::get<std::string>(v);
@@ -250,20 +261,96 @@ Value Interpreter::evaluate(ASTNode *node) {
         }
     }
     else if (auto var = dynamic_cast<VariableNode*>(node)) {
-        return env.getVariable(var->varName);
+        auto it = env.variables.find(var->varName);
+        if (it != env.variables.end()) {
+            return it->second;
+        }
+        else {
+            // Variable not found, return missing value
+            logLogger.warn("Variable '{}' not found. Using missing value.", var->varName);
+            return std::nan("");
+        }
+    }
+    else if (auto funcCall = dynamic_cast<FunctionCallNode*>(node)) {
+        Value argVal = evaluate(funcCall->argument.get());
+        double argNum = toNumber(argVal);
+        if (funcCall->funcName == "sqrt") {
+            return std::sqrt(argNum);
+        }
+        else if (funcCall->funcName == "abs") {
+            return std::abs(argNum);
+        }
+        else {
+            throw std::runtime_error("Unsupported function: " + funcCall->funcName);
+        }
     }
     else if (auto bin = dynamic_cast<BinaryOpNode*>(node)) {
         Value leftVal = evaluate(bin->left.get());
         Value rightVal = evaluate(bin->right.get());
         double l = toNumber(leftVal);
         double r = toNumber(rightVal);
-        switch (bin->op) {
-            case '+': return l + r;
-            case '-': return l - r;
-            case '*': return l * r;
-            case '/': return (r != 0.0) ? l / r : std::nan("");
+        std::string op = bin->op;
+
+        if (op == "+") return l + r;
+        else if (op == "-") return l - r;
+        else if (op == "*") return l * r;
+        else if (op == "/") return (r != 0.0) ? l / r : std::nan("");
+        else if (op == ">") return (l > r) ? 1.0 : 0.0;
+        else if (op == "<") return (l < r) ? 1.0 : 0.0;
+        else if (op == ">=") return (l >= r) ? 1.0 : 0.0;
+        else if (op == "<=") return (l <= r) ? 1.0 : 0.0;
+        else if (op == "==") return (l == r) ? 1.0 : 0.0;
+        else if (op == "!=") return (l != r) ? 1.0 : 0.0;
+        // Implement logical operators (and, or) as needed
+        else {
+            throw std::runtime_error("Unsupported binary operator: " + op);
         }
     }
     // Handle more expression types as needed
     throw std::runtime_error("Unsupported expression type during evaluation.");
+}
+
+void Interpreter::executeProc(ProcNode* node) {
+    if (node->procName == "print") {
+        logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
+        try {
+            auto dataset = env.getOrCreateDataset("", node->datasetName);
+            lstLogger.info("PROC PRINT Results for Dataset '{}':", dataset->name);
+            if (!env.title.empty()) {
+                lstLogger.info("Title: {}", env.title);
+            }
+
+            // Print column headers
+            std::string header;
+            for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
+                header += dataset->columnOrder[i];
+                if (i < dataset->columnOrder.size() - 1) header += "\t";
+            }
+            lstLogger.info("{}", header);
+
+            // Print rows
+            int obs = 1;
+            for (const auto& row : dataset->rows) {
+                std::string rowStr = std::to_string(obs++) + "\t";
+                for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
+                    const std::string& col = dataset->columnOrder[i];
+                    auto it = row.columns.find(col);
+                    if (it != row.columns.end()) {
+                        rowStr += toString(it->second);
+                    }
+                    else {
+                        rowStr += ".";
+                    }
+                    if (i < dataset->columnOrder.size() - 1) rowStr += "\t";
+                }
+                lstLogger.info("{}", rowStr);
+            }
+        }
+        catch (const std::runtime_error& e) {
+            logLogger.error("PROC PRINT failed: {}", e.what());
+        }
+    }
+    else {
+        logLogger.error("Unsupported PROC: {}", node->procName);
+    }
 }

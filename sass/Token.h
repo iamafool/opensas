@@ -18,6 +18,7 @@ namespace sass {
         KEYWORD_OPTIONS,
         KEYWORD_LIBNAME,
         KEYWORD_TITLE,
+        KEYWORD_PROC,
 
         EQUALS,
         SEMICOLON,
@@ -26,6 +27,8 @@ namespace sass {
         COMMA,
         QUOTE,
         DOT,
+        GREATER,
+        LESS,
 
         PLUS,
         MINUS,

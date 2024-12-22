@@ -9,7 +9,8 @@
 class Parser {
 public:
     Parser(const std::vector<Token> &tokens);
-    std::unique_ptr<ProgramNode> parse();
+    std::unique_ptr<ASTNode> parse();
+    std::unique_ptr<ProgramNode> parseProgram(); // To handle multiple global and data statements
 
 private:
     const std::vector<Token> &tokens;
@@ -21,7 +22,6 @@ private:
     Token advance();
 
     // Grammar rules
-    std::vector<std::unique_ptr<ASTNode>> parseProgram(); // To handle multiple global and data statements
     std::unique_ptr<ASTNode> parseStatement();
     std::unique_ptr<ASTNode> parseAssignment();
     std::unique_ptr<ASTNode> parseIfThen();
@@ -32,6 +32,7 @@ private:
     std::unique_ptr<ASTNode> parseTitle();
     std::unique_ptr<ASTNode> parseExpression();
     std::unique_ptr<ASTNode> parsePrimary();
+    std::unique_ptr<ASTNode> parseProc();
 };
 
 #endif // PARSER_H

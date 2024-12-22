@@ -12,8 +12,8 @@ public:
         : env(env), logLogger(logLogger), lstLogger(lstLogger) {}
 
     void executeProgram(const std::unique_ptr<ProgramNode> &program);
-
     spdlog::logger &logLogger;
+
 private:
     DataEnvironment &env;
     spdlog::logger &lstLogger;
@@ -26,6 +26,7 @@ private:
     void executeOptions(OptionsNode *node);
     void executeLibname(LibnameNode *node);
     void executeTitle(TitleNode *node);
+    void executeProc(ProcNode* node);
 
     double toNumber(const Value &v);
     std::string toString(const Value &v);
