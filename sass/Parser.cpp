@@ -94,7 +94,7 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
         case TokenType::IDENTIFIER:
             return parseAssignment();
         case TokenType::KEYWORD_IF:
-            return parseIfThen();
+            return parseIfElse(); // Updated to handle IF-ELSE
         case TokenType::KEYWORD_OUTPUT:
             return parseOutput();
         default:
@@ -513,3 +513,26 @@ std::unique_ptr<ASTNode> Parser::parseEndDo() {
     // Should be handled in parseDo()
     throw std::runtime_error("'enddo' should be handled within DO statement parsing.");
 }
+
+std::unique_ptr<ASTNode> Parser::parseIfElse() {
+    // if <condition> then <statements> else <statements>;
+    auto node = std::make_unique<IfElseNode>();
+    consume(TokenType::KEYWORD_IF, "Expected 'if'");
+    node->condition = parseExpression();
+    consume(TokenType::KEYWORD_THEN, "Expected 'then' after condition");
+
+    // Parse 'then' statements
+    // For simplicity, assume a single statement; can be extended to handle blocks
+    auto stmt = parseStatement();
+    if (stmt) node->thenStatements.push_back(std::move(stmt));
+
+    // Check for 'else'
+    if (peek().type == TokenType::KEYWORD_ELSE) {
+        consume(TokenType::KEYWORD_ELSE, "Expected 'else'");
+        auto elseStmt = parseStatement();
+        if (elseStmt) node->elseStatements.push_back(std::move(elseStmt));
+    }
+
+    return node;
+}
+

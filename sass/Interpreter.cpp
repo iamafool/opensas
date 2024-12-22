@@ -35,6 +35,9 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto proc = dynamic_cast<ProcNode*>(node)) {
         executeProc(proc);
     }
+    else if (auto ifElse = dynamic_cast<IfElseNode*>(node)) {
+        executeIfElse(ifElse);
+    }
     else {
         // Handle other statements
         // For now, ignore unknown statements or throw an error
@@ -717,6 +720,30 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     }
     catch (const std::runtime_error& e) {
         logLogger.error("PROC MEANS failed: {}", e.what());
+    }
+}
+
+void Interpreter::executeIfElse(IfElseNode* node) {
+    Value cond = evaluate(node->condition.get());
+    double d = toNumber(cond);
+    logLogger.info("Evaluating IF condition: {}", d);
+
+    if (d != 0.0) { // Non-zero is true
+        logLogger.info("Condition is TRUE. Executing THEN statements.");
+        for (const auto& stmt : node->thenStatements) {
+            execute(stmt.get());
+        }
+    }
+    else { // Zero is false
+        if (!node->elseStatements.empty()) {
+            logLogger.info("Condition is FALSE. Executing ELSE statements.");
+            for (const auto& stmt : node->elseStatements) {
+                execute(stmt.get());
+            }
+        }
+        else {
+            logLogger.info("Condition is FALSE. No ELSE statements to execute.");
+        }
     }
 }
 

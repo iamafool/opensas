@@ -7,6 +7,7 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["AND"] = TokenType::AND;
     keywords["OR"] = TokenType::OR;
     keywords["NOT"] = TokenType::NOT;
+    keywords["ELSE"] = TokenType::KEYWORD_ELSE;
 }
 
 char Lexer::peekChar() const {

@@ -13,6 +13,7 @@ namespace sass {
         KEYWORD_SET,
         KEYWORD_IF,
         KEYWORD_THEN,
+        KEYWORD_ELSE,
         KEYWORD_OUTPUT,
         KEYWORD_RUN,
         KEYWORD_OPTIONS,

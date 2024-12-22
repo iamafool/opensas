@@ -26,6 +26,7 @@ private:
     void executeDataStep(DataStepNode *node);
     void executeAssignment(AssignmentNode *node);
     void executeIfThen(IfThenNode *node);
+    void executeIfElse(IfElseNode* node); // Added method
     void executeOutput(OutputNode *node);
     void executeOptions(OptionsNode *node);
     void executeLibname(LibnameNode *node);

@@ -148,4 +148,12 @@ public:
     std::vector<std::string> varNames;
 };
 
+// Represents an IF-ELSE statement: if <condition> then <statements> else <statements>;
+class IfElseNode : public ASTNode {
+public:
+    std::unique_ptr<ASTNode> condition;
+    std::vector<std::unique_ptr<ASTNode>> thenStatements;
+    std::vector<std::unique_ptr<ASTNode>> elseStatements;
+};
+
 #endif // AST_H
