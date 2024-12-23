@@ -213,4 +213,18 @@ public:
     std::vector<std::string> datasets;
 };
 
+// Represents a DO loop: do; ... end;
+class DoLoopNode : public ASTNode {
+public:
+    std::unique_ptr<ASTNode> condition; // Can be nullptr for simple DO loops without conditions
+    std::unique_ptr<BlockNode> body;    // The block of statements within the loop
+    bool isWhile;                        // True for DO WHILE, False for DO UNTIL
+};
+
+// Represents an END statement: end;
+class EndNode : public ASTNode {
+public:
+    // Can include labels or other attributes if needed
+};
+
 #endif // AST_H

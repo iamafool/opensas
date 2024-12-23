@@ -31,6 +31,10 @@ namespace sass {
         KEYWORD_BY,
         KEYWORD_VAR,
         KEYWORD_MERGE,
+        KEYWORD_DOLOOP,
+        KEYWORD_WHILE,
+        KEYWORD_UNTIL,
+        KEYWORD_END,
 
         EQUALS,
         SEMICOLON,

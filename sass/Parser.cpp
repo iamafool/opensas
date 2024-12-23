@@ -92,6 +92,8 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
         case TokenType::KEYWORD_BY:
             return parseBy(); // Handle BY statements
         case TokenType::KEYWORD_DO:
+            return parseDoLoop(); // Handle DO loops
+        case TokenType::KEYWORD_DOLOOP:
             return parseDo();
         case TokenType::KEYWORD_ENDDO:
             return parseEndDo();
@@ -661,4 +663,42 @@ std::unique_ptr<ASTNode> Parser::parseBy() {
     consume(TokenType::SEMICOLON, "Expected ';' after BY statement");
 
     return byNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseDoLoop() {
+    // DO [WHILE(condition)] [UNTIL(condition)];
+    auto doLoopNode = std::make_unique<DoLoopNode>();
+    consume(TokenType::KEYWORD_DO, "Expected 'DO' keyword");
+
+    // Check for optional WHILE or UNTIL
+    if (match(TokenType::KEYWORD_WHILE)) {
+        doLoopNode->isWhile = true;
+        consume(TokenType::KEYWORD_WHILE, "Expected 'WHILE' after 'DO'");
+        consume(TokenType::LPAREN, "Expected '(' after 'WHILE'");
+        doLoopNode->condition = parseExpression(); // Parse condition expression
+        consume(TokenType::RPAREN, "Expected ')' after 'WHILE' condition");
+    }
+    else if (match(TokenType::KEYWORD_UNTIL)) {
+        doLoopNode->isWhile = false;
+        consume(TokenType::KEYWORD_UNTIL, "Expected 'UNTIL' after 'DO'");
+        consume(TokenType::LPAREN, "Expected '(' after 'UNTIL'");
+        doLoopNode->condition = parseExpression(); // Parse condition expression
+        consume(TokenType::RPAREN, "Expected ')' after 'UNTIL' condition");
+    }
+    else {
+        doLoopNode->isWhile = true; // Default to DO WHILE if no condition specified
+        doLoopNode->condition = nullptr;
+    }
+
+    // Parse the body of the DO loop (a block of statements)
+    doLoopNode->body = std::make_unique<BlockNode>();
+
+    while (!match(TokenType::KEYWORD_END) && pos < tokens.size()) {
+        doLoopNode->body->statements.push_back(parseStatement());
+    }
+
+    consume(TokenType::KEYWORD_END, "Expected 'END' to close 'DO' loop");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'END'");
+
+    return doLoopNode;
 }

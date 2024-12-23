@@ -12,6 +12,10 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["ARRAY"] = TokenType::KEYWORD_ARRAY;
     keywords["MERGE"] = TokenType::KEYWORD_MERGE;
     keywords["BY"] = TokenType::KEYWORD_BY;
+    keywords["DO"] = TokenType::KEYWORD_DO;
+    keywords["WHILE"] = TokenType::KEYWORD_WHILE;
+    keywords["UNTIL"] = TokenType::KEYWORD_UNTIL;
+    keywords["END"] = TokenType::KEYWORD_END;
 
 }
 

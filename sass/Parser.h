@@ -29,7 +29,7 @@ private:
     std::unique_ptr<ASTNode> parseTitle();
     std::unique_ptr<ASTNode> parseProc();
     std::unique_ptr<ASTNode> parseAssignment();
-    std::unique_ptr<ASTNode> parseIfElseIf(); // Updated to handle IF-ELSE IF
+    std::unique_ptr<ASTNode> parseIfElseIf();
     std::unique_ptr<ASTNode> parseIfThen();
     std::unique_ptr<ASTNode> parseIfElse();
     std::unique_ptr<ASTNode> parseOutput();
@@ -39,10 +39,11 @@ private:
     std::unique_ptr<ASTNode> parseArray();
     std::unique_ptr<ASTNode> parseDo();
     std::unique_ptr<ASTNode> parseEndDo();
-    std::unique_ptr<ASTNode> parseBlock(); // New method for parsing blocks
-    std::unique_ptr<ASTNode> parseFunctionCall(); // New method
-    std::unique_ptr<ASTNode> parseMerge(); // New method
-    std::unique_ptr<ASTNode> parseBy(); // New method
+    std::unique_ptr<ASTNode> parseBlock();
+    std::unique_ptr<ASTNode> parseFunctionCall();
+    std::unique_ptr<ASTNode> parseMerge();
+    std::unique_ptr<ASTNode> parseBy();
+    std::unique_ptr<ASTNode> parseDoLoop();
 
     // Expression parsing with precedence
     std::unique_ptr<ASTNode> parseExpression(int precedence = 0);

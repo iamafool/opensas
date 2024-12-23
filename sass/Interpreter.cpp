@@ -49,6 +49,12 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto byNode = dynamic_cast<ByStatementNode*>(node)) {
         executeBy(byNode);
     }
+    else if (auto doLoop = dynamic_cast<DoLoopNode*>(node)) {
+        executeDoLoop(doLoop);
+    }
+    else if (auto endNode = dynamic_cast<EndNode*>(node)) {
+        executeEnd(endNode);
+    }
     else {
         // Handle other statements
         // For now, ignore unknown statements or throw an error
@@ -1254,3 +1260,60 @@ void Interpreter::executeBy(ByStatementNode* node) {
     // Ensure that the BY variables are present in all datasets to be merged
     // This can be implemented as needed
 }
+
+void Interpreter::executeDoLoop(DoLoopNode* node) {
+    logLogger.info("Entering DO loop");
+
+    // Push the loop context onto the stack
+    loopStack.emplace(std::make_pair(node, 0));
+
+    // Set a maximum number of iterations to prevent infinite loops
+    const size_t MAX_ITERATIONS = 1000;
+
+    while (!loopStack.empty()) {
+        DoLoopNode* currentLoop = loopStack.top().first;
+        size_t& iterationCount = loopStack.top().second;
+
+        if (iterationCount >= MAX_ITERATIONS) {
+            logLogger.error("Potential infinite loop detected in DO loop. Exiting loop.");
+            loopStack.pop();
+            break;
+        }
+
+        bool conditionMet = true;
+
+        if (currentLoop->condition) {
+            Value condValue = evaluate(currentLoop->condition.get());
+            if (currentLoop->isWhile) {
+                conditionMet = std::holds_alternative<double>(condValue) ? std::get<double>(condValue) != 0.0 : false;
+            }
+            else { // DO UNTIL
+                conditionMet = !(std::holds_alternative<double>(condValue) ? std::get<double>(condValue) != 0.0 : false);
+            }
+        }
+
+        if (conditionMet) {
+            // Execute the loop body
+            execute(currentLoop->body.get());
+        }
+        else {
+            // Exit the loop
+            loopStack.pop();
+            logLogger.info("Exiting DO loop");
+            break;
+        }
+
+        // In this simplified implementation, we assume the loop condition is re-evaluated after each iteration
+    }
+}
+
+void Interpreter::executeEnd(EndNode* node) {
+    if (loopStack.empty()) {
+        throw std::runtime_error("END statement encountered without a corresponding DO loop.");
+    }
+
+    // Pop the current loop context to signify exiting the loop
+    loopStack.pop();
+    logLogger.info("Exiting DO loop via END statement");
+}
+

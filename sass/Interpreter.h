@@ -5,6 +5,10 @@
 #include "DataEnvironment.h"
 #include <memory>
 #include <spdlog/spdlog.h>
+#include <unordered_map>
+#include <vector>
+#include <string>
+#include <stack>
 
 class Interpreter {
 public:
@@ -23,6 +27,9 @@ private:
 
     // Current BY variables and their order
     std::vector<std::string> byVariables;
+
+    // Stack to manage loop contexts
+    std::stack<std::pair<DoLoopNode*, size_t>> loopStack;
 
     void execute(ASTNode *node);
     void executeDataStep(DataStepNode *node);
@@ -44,6 +51,8 @@ private:
     void executeBlock(BlockNode* node);
     void executeMerge(MergeStatementNode* node);
     void executeBy(ByStatementNode* node);
+    void executeDoLoop(DoLoopNode* node);
+    void executeEnd(EndNode* node);
 
     double toNumber(const Value &v);
     std::string toString(const Value &v);
