@@ -5,25 +5,34 @@
 
 Lexer::Lexer(const std::string &in) : input(in) {
     keywords["AND"] = TokenType::AND;
-    keywords["OR"] = TokenType::OR;
-    keywords["NOT"] = TokenType::NOT;
-    keywords["ELSE"] = TokenType::KEYWORD_ELSE;
-    keywords["ELSE IF"] = TokenType::KEYWORD_ELSE_IF;
     keywords["ARRAY"] = TokenType::KEYWORD_ARRAY;
-    keywords["MERGE"] = TokenType::KEYWORD_MERGE;
     keywords["BY"] = TokenType::KEYWORD_BY;
     keywords["DO"] = TokenType::KEYWORD_DO;
-    keywords["WHILE"] = TokenType::KEYWORD_WHILE;
-    keywords["UNTIL"] = TokenType::KEYWORD_UNTIL;
-    keywords["END"] = TokenType::KEYWORD_END;
-    keywords["PROC"] = TokenType::KEYWORD_PROC;
-    keywords["SORT"] = TokenType::KEYWORD_SORT;
-    keywords["BY"] = TokenType::KEYWORD_BY;
-    keywords["OUT"] = TokenType::KEYWORD_OUT;
-    keywords["WHERE"] = TokenType::KEYWORD_WHERE;
-    keywords["NODUPKEY"] = TokenType::KEYWORD_NODUPKEY;
     keywords["DUPLICATES"] = TokenType::KEYWORD_DUPLICATES;
+    keywords["ELSE IF"] = TokenType::KEYWORD_ELSE_IF;
+    keywords["ELSE"] = TokenType::KEYWORD_ELSE;
+    keywords["END"] = TokenType::KEYWORD_END;
+    keywords["MAX"] = TokenType::KEYWORD_MAX;
+    keywords["MEAN"] = TokenType::KEYWORD_MEAN;
+    keywords["MEANS"] = TokenType::KEYWORD_MEANS;
+    keywords["MEDIAN"] = TokenType::KEYWORD_MEDIAN;
+    keywords["MERGE"] = TokenType::KEYWORD_MERGE;
+    keywords["MIN"] = TokenType::KEYWORD_MIN;
+    keywords["N"] = TokenType::KEYWORD_N;
+    keywords["NODUPKEY"] = TokenType::KEYWORD_NODUPKEY;
+    keywords["NOMISSING"] = TokenType::KEYWORD_NOMISSING; // Optional for 
+    keywords["NOT"] = TokenType::NOT;
+    keywords["OR"] = TokenType::OR;
+    keywords["OUT"] = TokenType::KEYWORD_OUT;
+    keywords["OUTPUT"] = TokenType::KEYWORD_OUTPUT;
+    keywords["PROC"] = TokenType::KEYWORD_PROC;
     keywords["RUN"] = TokenType::KEYWORD_RUN;
+    keywords["SORT"] = TokenType::KEYWORD_SORT;
+    keywords["STD"] = TokenType::KEYWORD_STD;
+    keywords["UNTIL"] = TokenType::KEYWORD_UNTIL;
+    keywords["VAR"] = TokenType::KEYWORD_VAR;
+    keywords["WHERE"] = TokenType::KEYWORD_WHERE;
+    keywords["WHILE"] = TokenType::KEYWORD_WHILE;
 
 }
 
@@ -158,7 +167,7 @@ Token Lexer::getNextToken() {
             switch (current) {
             case '>': return Token{ TokenType::GREATER, ">", line, col - 1 };
             case '<': return Token{ TokenType::LESS, "<", line, col - 1 };
-            case '=': return Token{ TokenType::EQUALS, "=", line, col - 1 };
+            case '=': return Token{ TokenType::EQUAL, "=", line, col - 1 };
             case '!': return Token{ TokenType::NOT, "!", line, col - 1 };
             default: break;
             }

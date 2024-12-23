@@ -364,6 +364,9 @@ void Interpreter::executeProc(ProcNode* node) {
     if (auto procSort = dynamic_cast<ProcSortNode*>(node)) {
         executeProcSort(procSort);
     }
+    else if (auto procMeans = dynamic_cast<ProcMeansNode*>(node)) {
+        executeProcMeans(procMeans);
+    }
     else {
         if (node->procName == "print") {
             logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
@@ -403,10 +406,6 @@ void Interpreter::executeProc(ProcNode* node) {
             catch (const std::runtime_error& e) {
                 logLogger.error("PROC PRINT failed: {}", e.what());
             }
-        }
-        else if (node->procName == "means") {
-            // Should not reach here; PROC MEANS is handled as ProcMeansNode
-            throw std::runtime_error("PROC MEANS should be handled as ProcMeansNode");
         }
         else {
             logLogger.error("Unsupported PROC: {}", node->procName);
@@ -831,48 +830,182 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 }
 
 void Interpreter::executeProcMeans(ProcMeansNode* node) {
-    logLogger.info("Executing PROC MEANS on dataset '{}'.", node->datasetName);
-    try {
-        auto dataset = env.getOrCreateDataset("", node->datasetName);
-        lstLogger.info("PROC MEANS Results for Dataset '{}':", dataset->name);
-        if (!env.title.empty()) {
-            lstLogger.info("Title: {}", env.title);
+    logLogger.info("Executing PROC MEANS");
+
+    // Retrieve the input dataset
+    DataSet* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    if (!inputDS) {
+        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC MEANS.");
+    }
+
+    // Apply WHERE condition if specified
+    DataSet* filteredDS = inputDS;
+    if (node->whereCondition) {
+        // Create a temporary dataset to hold filtered rows
+        std::string tempDSName = "TEMP_MEANS_FILTERED";
+        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        tempDS->rows.clear();
+
+        for (const auto& row : inputDS->rows) {
+            env.currentRow = row;
+            Value condValue = evaluate(node->whereCondition.get());
+            bool conditionTrue = false;
+            if (std::holds_alternative<double>(condValue)) {
+                conditionTrue = (std::get<double>(condValue) != 0.0);
+            }
+            else if (std::holds_alternative<std::string>(condValue)) {
+                conditionTrue = (!std::get<std::string>(condValue).empty());
+            }
+            // Add other data types as needed
+
+            if (conditionTrue) {
+                tempDS->rows.push_back(row);
+            }
         }
 
-        // Calculate means for specified variables
-        std::unordered_map<std::string, double> sums;
-        std::unordered_map<std::string, int> counts;
+        filteredDS = tempDS.get();
+        logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
+    }
 
-        for (const auto& var : node->varNames) {
-            sums[var] = 0.0;
-            counts[var] = 0;
-        }
+    // Initialize statistics containers
+    struct Stats {
+        int n = 0;
+        double mean = 0.0;
+        double median = 0.0;
+        double stddev = 0.0;
+        double min = 0.0;
+        double max = 0.0;
+        std::vector<double> values; // For median calculation
+    };
 
-        for (const auto& row : dataset->rows) {
-            for (const auto& var : node->varNames) {
-                auto it = row.columns.find(var);
-                if (it != row.columns.end() && std::holds_alternative<double>(it->second)) {
-                    sums[var] += std::get<double>(it->second);
-                    counts[var]++;
+    std::unordered_map<std::string, Stats> statisticsMap;
+
+    // Initialize Stats for each variable
+    for (const auto& var : node->varVariables) {
+        statisticsMap[var] = Stats();
+    }
+
+    // Calculate statistics
+    for (const auto& row : filteredDS->rows) {
+        for (const auto& var : node->varVariables) {
+            auto it = row.columns.find(var);
+            if (it != row.columns.end() && std::holds_alternative<double>(it->second)) {
+                double val = std::get<double>(it->second);
+                statisticsMap[var].n += 1;
+                statisticsMap[var].mean += val;
+                statisticsMap[var].values.push_back(val);
+                if (statisticsMap[var].n == 1 || val < statisticsMap[var].min) {
+                    statisticsMap[var].min = val;
+                }
+                if (statisticsMap[var].n == 1 || val > statisticsMap[var].max) {
+                    statisticsMap[var].max = val;
                 }
             }
         }
+    }
 
-        // Print the means
-        lstLogger.info("Variable\tMean");
-        for (const auto& var : node->varNames) {
-            if (counts[var] > 0) {
-                double mean = sums[var] / counts[var];
-                lstLogger.info("{}\t{:.2f}", var, mean);
+    // Finalize mean and calculate stddev and median
+    for (auto& entry : statisticsMap) {
+        std::string var = entry.first;
+        Stats& stats = entry.second;
+
+        if (stats.n > 0) {
+            stats.mean /= stats.n;
+
+            // Calculate standard deviation
+            double sumSquares = 0.0;
+            for (const auto& val : stats.values) {
+                sumSquares += (val - stats.mean) * (val - stats.mean);
+            }
+            stats.stddev = std::sqrt(sumSquares / (stats.n - 1));
+
+            // Calculate median
+            std::vector<double> sortedValues = stats.values;
+            std::sort(sortedValues.begin(), sortedValues.end());
+            if (stats.n % 2 == 1) {
+                stats.median = sortedValues[stats.n / 2];
             }
             else {
-                lstLogger.info("{}\t.", var); // Missing values
+                stats.median = (sortedValues[(stats.n / 2) - 1] + sortedValues[stats.n / 2]) / 2.0;
             }
         }
     }
-    catch (const std::runtime_error& e) {
-        logLogger.error("PROC MEANS failed: {}", e.what());
+
+    // Prepare output dataset if specified
+    DataSet* outputDS = nullptr;
+    if (!node->outputDataSet.empty()) {
+        outputDS = env.getOrCreateDataset(node->outputDataSet, node->outputDataSet).get();
+        outputDS->rows.clear();
     }
+
+    // Generate statistics output
+    logLogger.info("Generated PROC MEANS statistics:");
+    for (const auto& var : node->varVariables) {
+        const Stats& stats = statisticsMap[var];
+        if (stats.n > 0) {
+            std::stringstream ss;
+            ss << "Variable: " << var << "\n";
+            for (const auto& stat : node->statistics) {
+                if (stat == "N") {
+                    ss << "  N: " << stats.n << "\n";
+                }
+                else if (stat == "MEAN") {
+                    ss << "  Mean: " << stats.mean << "\n";
+                }
+                else if (stat == "MEDIAN") {
+                    ss << "  Median: " << stats.median << "\n";
+                }
+                else if (stat == "STD") {
+                    ss << "  Std Dev: " << stats.stddev << "\n";
+                }
+                else if (stat == "MIN") {
+                    ss << "  Min: " << stats.min << "\n";
+                }
+                else if (stat == "MAX") {
+                    ss << "  Max: " << stats.max << "\n";
+                }
+            }
+            logLogger.info(ss.str());
+
+            if (outputDS) {
+                // Create a row for each statistic
+                Row statRow;
+                statRow.columns["Variable"] = var;
+                for (const auto& stat : node->statistics) {
+                    if (stat == "N") {
+                        statRow.columns["N"] = static_cast<double>(stats.n);
+                    }
+                    else if (stat == "MEAN") {
+                        statRow.columns["Mean"] = stats.mean;
+                    }
+                    else if (stat == "MEDIAN") {
+                        statRow.columns["Median"] = stats.median;
+                    }
+                    else if (stat == "STD") {
+                        statRow.columns["StdDev"] = stats.stddev;
+                    }
+                    else if (stat == "MIN") {
+                        statRow.columns["Min"] = stats.min;
+                    }
+                    else if (stat == "MAX") {
+                        statRow.columns["Max"] = stats.max;
+                    }
+                }
+                outputDS->rows.push_back(statRow);
+            }
+        }
+        else {
+            logLogger.warn("Variable '{}' has no valid observations for PROC MEANS.", var);
+        }
+    }
+
+    // If OUTPUT dataset is specified, log its creation
+    if (outputDS) {
+        logLogger.info("PROC MEANS output dataset '{}' created with {} observations.",
+            node->outputDataSet, outputDS->rows.size());
+    }
+
+    logLogger.info("PROC MEANS executed successfully.");
 }
 
 void Interpreter::executeIfElse(IfElseIfNode* node) {

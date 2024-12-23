@@ -160,7 +160,7 @@ std::unique_ptr<ASTNode> Parser::parseOptions() {
         // Parse option name
         std::string optionName = consume(TokenType::IDENTIFIER, "Expected option name").text;
         // Expect '='
-        consume(TokenType::EQUALS, "Expected '=' after option name");
+        consume(TokenType::EQUAL, "Expected '=' after option name");
         // Parse option value, could be string or number
         std::string optionValue;
         if (peek().type == TokenType::STRING) {
@@ -220,7 +220,7 @@ std::unique_ptr<ASTNode> Parser::parseAssignment() {
     // var = expr;
     auto node = std::make_unique<AssignmentNode>();
     node->varName = consume(TokenType::IDENTIFIER, "Expected variable name").text;
-    consume(TokenType::EQUALS, "Expected '='");
+    consume(TokenType::EQUAL, "Expected '='");
     node->expression = parseExpression();
     consume(TokenType::SEMICOLON, "Expected ';' after assignment");
     return node;
@@ -340,6 +340,9 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
     if (t.type == TokenType::KEYWORD_SORT) {
         return parseProcSort();
     }
+    else if (t.type == TokenType::KEYWORD_MEANS) {
+        return parseProcMeans();
+    }
     else {
         node->procName = consume(TokenType::IDENTIFIER, "Expected PROC name").text;
         consume(TokenType::SEMICOLON, "Expected ';' after PROC name");
@@ -349,7 +352,7 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
             // Expect 'data=<dataset>'
             if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
                 advance(); // Consume 'data'
-                consume(TokenType::EQUALS, "Expected '=' after 'data'");
+                consume(TokenType::EQUAL, "Expected '=' after 'data'");
                 node->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
                 consume(TokenType::SEMICOLON, "Expected ';' after dataset name");
             }
@@ -363,42 +366,6 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
 
             consume(TokenType::KEYWORD_RUN, "Expected 'run'");
             consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
-        }
-        else if (node->procName == "means") {
-            // Handle PROC MEANS
-            auto meansNode = std::make_unique<ProcMeansNode>();
-            // Expect 'data=<dataset>'
-            if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
-                consume(TokenType::IDENTIFIER, "Expected 'data' in PROC MEANS");
-                consume(TokenType::EQUALS, "Expected '=' after 'data'");
-                meansNode->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
-            }
-            else {
-                throw std::runtime_error("Expected 'data=<dataset>' in PROC MEANS");
-            }
-
-            // Expect 'var var1 var2 ...;'
-            consume(TokenType::KEYWORD_VAR, "Expected 'var' in PROC MEANS");
-            while (peek().type == TokenType::IDENTIFIER) {
-                meansNode->varNames.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in 'var' statement").text);
-            }
-            consume(TokenType::SEMICOLON, "Expected ';' after 'var' statement");
-
-            // Parse until 'run;'
-            while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
-                // Currently, PROC MEANS doesn't support additional statements
-                // Throw error if unexpected statements are found
-                throw std::runtime_error("Unsupported statement in PROC MEANS");
-            }
-
-            consume(TokenType::KEYWORD_RUN, "Expected 'run'");
-            consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
-
-            // Convert ProcMeansNode to ProcNode for consistency
-            auto finalMeansNode = std::make_unique<ProcMeansNode>();
-            finalMeansNode->datasetName = meansNode->datasetName;
-            finalMeansNode->varNames = meansNode->varNames;
-            return finalMeansNode;
         }
         else {
             // Unsupported PROC
@@ -474,7 +441,7 @@ std::unique_ptr<ASTNode> Parser::parseDo() {
     auto node = std::make_unique<DoNode>();
     consume(TokenType::KEYWORD_DO, "Expected 'do'");
     node->loopVar = consume(TokenType::IDENTIFIER, "Expected loop variable").text;
-    consume(TokenType::EQUALS, "Expected '=' in DO statement");
+    consume(TokenType::EQUAL, "Expected '=' in DO statement");
     node->startExpr = parseExpression();
     consume(TokenType::KEYWORD_TO, "Expected 'to' in DO statement");
     node->endExpr = parseExpression();
@@ -732,4 +699,92 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
     consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
 
     return procSortNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseProcMeans() {
+    auto procMeansNode = std::make_unique<ProcMeansNode>();
+    consume(TokenType::KEYWORD_MEANS, "Expected 'MEANS' keyword after 'PROC'");
+
+    // Parse DATA= option
+    if (match(TokenType::KEYWORD_DATA)) {
+        consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC MEANS");
+        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
+        procMeansNode->inputDataSet = dataToken.text;
+    }
+    else {
+        throw std::runtime_error("PROC MEANS requires a DATA= option");
+    }
+
+    // Parse statistical options (N, MEAN, MEDIAN, STD, MIN, MAX)
+    while (match(TokenType::KEYWORD_N) ||
+        match(TokenType::KEYWORD_MEAN) ||
+        match(TokenType::KEYWORD_MEDIAN) ||
+        match(TokenType::KEYWORD_STD) ||
+        match(TokenType::KEYWORD_MIN) ||
+        match(TokenType::KEYWORD_MAX)) {
+        Token statToken = advance();
+        switch (statToken.type) {
+        case TokenType::KEYWORD_N:
+            procMeansNode->statistics.push_back("N");
+            break;
+        case TokenType::KEYWORD_MEAN:
+            procMeansNode->statistics.push_back("MEAN");
+            break;
+        case TokenType::KEYWORD_MEDIAN:
+            procMeansNode->statistics.push_back("MEDIAN");
+            break;
+        case TokenType::KEYWORD_STD:
+            procMeansNode->statistics.push_back("STD");
+            break;
+        case TokenType::KEYWORD_MIN:
+            procMeansNode->statistics.push_back("MIN");
+            break;
+        case TokenType::KEYWORD_MAX:
+            procMeansNode->statistics.push_back("MAX");
+            break;
+        default:
+            break;
+        }
+    }
+
+    // Parse VAR statement
+    if (match(TokenType::KEYWORD_VAR)) {
+        consume(TokenType::KEYWORD_VAR, "Expected 'VAR' keyword in PROC MEANS");
+        while (peek().type == TokenType::IDENTIFIER) {
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in VAR statement");
+            procMeansNode->varVariables.push_back(varToken.text);
+        }
+    }
+    else {
+        throw std::runtime_error("PROC MEANS requires a VAR statement");
+    }
+
+    // Parse optional OUTPUT statement
+    if (match(TokenType::KEYWORD_OUTPUT)) {
+        consume(TokenType::KEYWORD_OUTPUT, "Expected 'OUTPUT' keyword in PROC MEANS");
+        if (match(TokenType::KEYWORD_OUT)) {
+            consume(TokenType::KEYWORD_OUT, "Expected 'OUT=' option in OUTPUT statement");
+            Token outToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'OUT='");
+            procMeansNode->outputDataSet = outToken.text;
+        }
+
+        // Parse output options like N=, MEAN=, etc.
+        while (match(TokenType::IDENTIFIER)) {
+            Token optionToken = consume(TokenType::IDENTIFIER, "Expected output option in OUTPUT statement");
+            if (match(TokenType::EQUAL)) {
+                consume(TokenType::EQUAL, "Expected '=' after output option");
+                Token valueToken = consume(TokenType::IDENTIFIER, "Expected value after '=' in output option");
+                procMeansNode->outputOptions[optionToken.text] = valueToken.text;
+            }
+            else {
+                throw std::runtime_error("Expected '=' after output option in OUTPUT statement");
+            }
+        }
+    }
+
+    // Expect RUN; statement
+    consume(TokenType::KEYWORD_RUN, "Expected 'RUN;' to terminate PROC MEANS");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
+
+    return procMeansNode;
 }

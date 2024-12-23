@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 // Base class for all AST nodes
 class ASTNode {
@@ -179,11 +180,15 @@ public:
     bool duplicates;             // Flag for DUPLICATES option
 };
 
-// Represents a PROC MEANS step: proc means data=<dataset>; var <variables>; run;
+// Represents the PROC MEANS procedure
 class ProcMeansNode : public ASTNode {
 public:
-    std::string datasetName;
-    std::vector<std::string> varNames;
+    std::string inputDataSet;                    // Dataset to analyze (DATA=)
+    std::vector<std::string> statistics;         // Statistical options (N, MEAN, etc.)
+    std::vector<std::string> varVariables;       // Variables to analyze (VAR statement)
+    std::string outputDataSet;                   // Output dataset (OUT=), can be empty
+    std::unordered_map<std::string, std::string> outputOptions; // Output options like n=, mean=, etc.
+    std::unique_ptr<ASTNode> whereCondition; // Optional WHERE 
 };
 
 // Represents an IF-ELSE statement: if <condition> then <statements> else <statements>;
