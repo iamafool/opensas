@@ -349,6 +349,9 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
     else if (t.type == TokenType::KEYWORD_PRINT) {
         return parseProcPrint();
     }
+    else if (t.type == TokenType::KEYWORD_SQL) {
+        return parseProcSQL();
+    }
     else {
         throw std::runtime_error("Unsupported PROC type: " + t.text);
     }
@@ -882,3 +885,151 @@ std::unique_ptr<ASTNode> Parser::parseProcPrint() {
     return procPrintNode;
 }
 
+std::unique_ptr<ASTNode> Parser::parseProcSQL() {
+    auto procSQLNode = std::make_unique<ProcSQLNode>();
+    consume(TokenType::KEYWORD_SQL, "Expected 'SQL' keyword after 'PROC'");
+
+    // Parse SQL statements until 'QUIT;' is encountered
+    while (!(match(TokenType::KEYWORD_QUIT) && peek().type == TokenType::SEMICOLON)) {
+        auto sqlStmt = parseSQLStatement();
+        if (sqlStmt) {
+            procSQLNode->statements.emplace_back(std::move(sqlStmt));
+        }
+        else {
+            throw std::runtime_error("Unsupported SQL statement in PROC SQL.");
+        }
+    }
+
+    // Consume 'QUIT;' statement
+    consume(TokenType::KEYWORD_QUIT, "Expected 'QUIT' to terminate PROC SQL");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'QUIT'");
+
+    return procSQLNode;
+}
+
+std::unique_ptr<SQLStatementNode> Parser::parseSQLStatement() {
+    Token t = peek();
+    if (t.type == TokenType::KEYWORD_SELECT) {
+        // Parse SELECT statement
+        auto selectStmt = std::make_unique<SelectStatementNode>();
+        consume(TokenType::KEYWORD_SELECT, "Expected 'SELECT' keyword");
+
+        // Parse selected columns
+        while (true) {
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected column name in SELECT statement");
+            selectStmt->selectColumns.push_back(varToken.text);
+
+            if (match(TokenType::COMMA)) {
+                consume(TokenType::COMMA, "Expected ',' between columns in SELECT statement");
+            }
+            else {
+                break;
+            }
+        }
+
+        // Parse FROM clause
+        consume(TokenType::KEYWORD_FROM, "Expected 'FROM' keyword in SELECT statement");
+        while (true) {
+            Token tableToken = consume(TokenType::IDENTIFIER, "Expected table name in FROM clause");
+            selectStmt->fromTables.push_back(tableToken.text);
+
+            if (match(TokenType::COMMA)) {
+                consume(TokenType::COMMA, "Expected ',' between tables in FROM clause");
+            }
+            else {
+                break;
+            }
+        }
+
+        // Parse optional WHERE clause
+        if (match(TokenType::KEYWORD_WHERE)) {
+            consume(TokenType::KEYWORD_WHERE, "Expected 'WHERE' keyword");
+            selectStmt->whereCondition = parseExpression(); // Parse condition expression
+        }
+
+        // Parse optional GROUP BY clause
+        if (match(TokenType::KEYWORD_GROUP)) {
+            consume(TokenType::KEYWORD_GROUP, "Expected 'GROUP' keyword");
+            consume(TokenType::KEYWORD_BY, "Expected 'BY' keyword after 'GROUP'");
+            while (true) {
+                Token groupVarToken = consume(TokenType::IDENTIFIER, "Expected column name in GROUP BY clause");
+                selectStmt->groupByColumns.push_back(groupVarToken.text);
+
+                if (match(TokenType::COMMA)) {
+                    consume(TokenType::COMMA, "Expected ',' between columns in GROUP BY clause");
+                }
+                else {
+                    break;
+                }
+            }
+        }
+
+        // Parse optional HAVING clause
+        if (match(TokenType::KEYWORD_HAVING)) {
+            consume(TokenType::KEYWORD_HAVING, "Expected 'HAVING' keyword");
+            selectStmt->havingCondition = parseExpression(); // Parse HAVING condition expression
+        }
+
+        // Parse optional ORDER BY clause
+        if (match(TokenType::KEYWORD_ORDER)) {
+            consume(TokenType::KEYWORD_ORDER, "Expected 'ORDER' keyword");
+            consume(TokenType::KEYWORD_BY, "Expected 'BY' keyword after 'ORDER'");
+            while (true) {
+                Token orderVarToken = consume(TokenType::IDENTIFIER, "Expected column name in ORDER BY clause");
+                selectStmt->orderByColumns.push_back(orderVarToken.text);
+
+                if (match(TokenType::COMMA)) {
+                    consume(TokenType::COMMA, "Expected ',' between columns in ORDER BY clause");
+                }
+                else {
+                    break;
+                }
+            }
+        }
+
+        // Consume semicolon at the end of the statement
+        consume(TokenType::SEMICOLON, "Expected ';' after SELECT statement");
+
+        return selectStmt;
+    }
+    else if (t.type == TokenType::KEYWORD_CREATE) {
+        // Parse CREATE TABLE statement
+        auto createStmt = std::make_unique<CreateTableStatementNode>();
+        consume(TokenType::KEYWORD_CREATE, "Expected 'CREATE' keyword");
+
+        consume(TokenType::KEYWORD_TABLE, "Expected 'TABLE' keyword after 'CREATE'");
+
+        Token tableNameToken = consume(TokenType::IDENTIFIER, "Expected table name after 'CREATE TABLE'");
+        createStmt->tableName = tableNameToken.text;
+
+        consume(TokenType::LPAREN, "Expected '(' after table name in CREATE TABLE statement");
+
+        // Parse column definitions
+        while (true) {
+            Token columnToken = consume(TokenType::IDENTIFIER, "Expected column name in CREATE TABLE statement");
+            createStmt->columns.push_back(columnToken.text);
+
+            // Optionally, parse data type definitions (e.g., varchar, int)
+            // This implementation focuses on column names. Extend as needed.
+
+            if (match(TokenType::COMMA)) {
+                consume(TokenType::COMMA, "Expected ',' between columns in CREATE TABLE statement");
+            }
+            else {
+                break;
+            }
+        }
+
+        consume(TokenType::RPAREN, "Expected ')' after column definitions in CREATE TABLE statement");
+        consume(TokenType::SEMICOLON, "Expected ';' after CREATE TABLE statement");
+
+        return createStmt;
+    }
+
+    // Implement other SQL statement parsers (INSERT, UPDATE, DELETE) similarly
+
+    else {
+        // Unsupported SQL statement
+        return nullptr;
+    }
+}

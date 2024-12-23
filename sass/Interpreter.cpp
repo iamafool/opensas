@@ -374,6 +374,9 @@ void Interpreter::executeProc(ProcNode* node) {
     else if (auto procPrint = dynamic_cast<ProcPrintNode*>(node)) {
         executeProcPrint(procPrint);
     }
+    else if (auto procSQL = dynamic_cast<ProcSQLNode*>(node)) {
+        executeProcSQL(procSQL);
+    }
     else {
         throw std::runtime_error("Unsupported PROC type.");
     }
@@ -1789,3 +1792,176 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
     logLogger.info("PROC PRINT executed successfully.");
 }
 
+void Interpreter::executeProcSQL(ProcSQLNode* node) {
+    logLogger.info("Executing PROC SQL");
+
+    for (const auto& sqlStmt : node->statements) {
+        if (auto selectStmt = dynamic_cast<SelectStatementNode*>(sqlStmt.get())) {
+            Dataset* resultDS = executeSelect(selectStmt);
+            // Handle the result dataset as needed
+            // For example, if creating a new table, it has been handled in executeSelect
+            // Otherwise, you can log the results or perform further actions
+        }
+        else if (auto createStmt = dynamic_cast<CreateTableStatementNode*>(sqlStmt.get())) {
+            executeCreateTable(createStmt);
+        }
+        else {
+            logLogger.warn("Unsupported SQL statement encountered in PROC SQL.");
+        }
+    }
+
+    logLogger.info("PROC SQL executed successfully.");
+}
+
+Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
+    // For simplicity, handle basic SELECT statements without joins or subqueries
+    // Extend this method to handle joins, subqueries, and other SQL features
+
+    // Create a new dataset to store the results
+    std::string resultTableName = "SQL_RESULT";
+    Dataset* resultDS = env.getOrCreateDataset(resultTableName, resultTableName).get();
+    resultDS->rows.clear();
+
+    // Determine source tables
+    if (selectStmt->fromTables.empty()) {
+        throw std::runtime_error("SELECT statement requires at least one table in FROM clause.");
+    }
+
+    // For simplicity, handle single table SELECT
+    if (selectStmt->fromTables.size() > 1) {
+        throw std::runtime_error("Multi-table SELECT statements (joins) are not yet supported.");
+    }
+
+    std::string sourceTableName = selectStmt->fromTables[0];
+    Dataset* sourceDS = env.getOrCreateDataset(sourceTableName, sourceTableName).get();
+    if (!sourceDS) {
+        throw std::runtime_error("Source table '" + sourceTableName + "' not found for SELECT statement.");
+    }
+
+    // Iterate over source dataset rows and apply WHERE condition
+    for (const auto& row : sourceDS->rows) {
+        bool includeRow = true;
+        if (selectStmt->whereCondition) {
+            env.currentRow = row;
+            Value condValue = evaluate(selectStmt->whereCondition.get());
+            if (std::holds_alternative<double>(condValue)) {
+                includeRow = (std::get<double>(condValue) != 0.0);
+            }
+            else if (std::holds_alternative<std::string>(condValue)) {
+                includeRow = (!std::get<std::string>(condValue).empty());
+            }
+            // Add other data types as needed
+        }
+
+        if (includeRow) {
+            Row newRow;
+            for (const auto& col : selectStmt->selectColumns) {
+                auto it = row.columns.find(col);
+                if (it != row.columns.end()) {
+                    newRow.columns[col] = it->second;
+                }
+                else {
+                    newRow.columns[col] = "NA"; // Handle missing columns
+                }
+            }
+            resultDS->rows.push_back(newRow);
+        }
+    }
+
+    // Handle GROUP BY and HAVING clauses if present
+    if (!selectStmt->groupByColumns.empty()) {
+        // Implement GROUP BY logic with aggregations
+        // For simplicity, this implementation does not handle aggregations
+        logLogger.warn("GROUP BY clauses are not yet fully supported in PROC SQL.");
+    }
+
+    // Handle ORDER BY clause if present
+    if (!selectStmt->orderByColumns.empty()) {
+        // Implement ORDER BY logic
+        // For simplicity, sort by the first column specified
+        std::string sortColumn = selectStmt->orderByColumns[0];
+        std::sort(resultDS->rows.begin(), resultDS->rows.end(),
+            [&](const Row& a, const Row& b) -> bool {
+                auto itA = a.columns.find(sortColumn);
+                auto itB = b.columns.find(sortColumn);
+                if (itA != a.columns.end() && itB != b.columns.end()) {
+                    if (std::holds_alternative<double>(itA->second) &&
+                        std::holds_alternative<double>(itB->second)) {
+                        return std::get<double>(itA->second) < std::get<double>(itB->second);
+                    }
+                    else if (std::holds_alternative<std::string>(itA->second) &&
+                        std::holds_alternative<std::string>(itB->second)) {
+                        return std::get<std::string>(itA->second) < std::get<std::string>(itB->second);
+                    }
+                }
+                return false;
+            });
+    }
+
+    // Log the results
+    std::stringstream ss;
+    ss << "PROC SQL SELECT Results (Dataset: " << resultDS->name << "):\n";
+    if (resultDS->rows.empty()) {
+        ss << "No records found.\n";
+    }
+    else {
+        // Print header
+        ss << "OBS\t";
+        size_t colCount = 0;
+        for (const auto& col : selectStmt->selectColumns) {
+            ss << col;
+            if (colCount != selectStmt->selectColumns.size() - 1) {
+                ss << "\t";
+            }
+            colCount++;
+        }
+        ss << "\n";
+
+        // Print rows
+        for (size_t i = 0; i < resultDS->rows.size(); ++i) {
+            ss << (i + 1) << "\t";
+            const Row& row = resultDS->rows[i];
+            for (size_t j = 0; j < selectStmt->selectColumns.size(); ++j) {
+                const std::string& col = selectStmt->selectColumns[j];
+                auto it = row.columns.find(col);
+                if (it != row.columns.end()) {
+                    if (std::holds_alternative<double>(it->second)) {
+                        ss << std::fixed << std::setprecision(2) << std::get<double>(it->second);
+                    }
+                    else if (std::holds_alternative<std::string>(it->second)) {
+                        ss << std::get<std::string>(it->second);
+                    }
+                    // Handle other data types as needed
+                }
+                else {
+                    ss << "NA";
+                }
+
+                if (j != selectStmt->selectColumns.size() - 1) {
+                    ss << "\t";
+                }
+            }
+            ss << "\n";
+        }
+    }
+
+    logLogger.info(ss.str());
+
+    return resultDS;
+}
+
+void Interpreter::executeCreateTable(const CreateTableStatementNode* createStmt) {
+    // Create a new dataset with the specified columns
+    std::string newTableName = createStmt->tableName;
+    Dataset* newDS = env.getOrCreateDataset(newTableName, newTableName).get();
+    newDS->rows.clear();
+
+    // For simplicity, initialize columns without specific data types
+    for (const auto& col : createStmt->columns) {
+        // todo newDS->columns[col] = Value(); // Initialize with default values
+    }
+
+    logLogger.info("PROC SQL: Created table '{}'.", newTableName);
+}
+
+// Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed

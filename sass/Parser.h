@@ -48,6 +48,8 @@ private:
     std::unique_ptr<ASTNode> parseProcMeans();
     std::unique_ptr<ASTNode> parseProcFreq();
     std::unique_ptr<ASTNode> parseProcPrint();
+    std::unique_ptr<ASTNode> parseProcSQL();
+    std::unique_ptr<SQLStatementNode> parseSQLStatement();
 
     // Expression parsing with precedence
     std::unique_ptr<ASTNode> parseExpression(int precedence = 0);

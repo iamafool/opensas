@@ -50,6 +50,7 @@ private:
     void executeProcMeans(ProcMeansNode* node);
     void executeProcFreq(ProcFreqNode* node);
     void executeProcPrint(ProcPrintNode* node);
+    void executeProcSQL(ProcSQLNode* node);
     void executeBlock(BlockNode* node);
     void executeMerge(MergeStatementNode* node);
     void executeBy(ByStatementNode* node);
@@ -70,6 +71,10 @@ private:
     Value getArrayElement(const std::string& arrayName, int index);
     void setArrayElement(const std::string& arrayName, int index, const Value& value);
 
+    // SQL execution helpers
+    Dataset* executeSelect(const SelectStatementNode* selectStmt);
+    void executeCreateTable(const CreateTableStatementNode* createStmt);
+    // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
 };
 
 #endif // INTERPRETER_H

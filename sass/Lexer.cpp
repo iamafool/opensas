@@ -43,6 +43,26 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["OBS"] = TokenType::KEYWORD_OBS;
     keywords["NOOBS"] = TokenType::KEYWORD_NOOBS;
     keywords["LABEL"] = TokenType::KEYWORD_LABEL;
+    keywords["SQL"] = TokenType::KEYWORD_SQL;
+    keywords["SELECT"] = TokenType::KEYWORD_SELECT;
+    keywords["FROM"] = TokenType::KEYWORD_FROM;
+    keywords["GROUP"] = TokenType::KEYWORD_GROUP;
+    keywords["HAVING"] = TokenType::KEYWORD_HAVING;
+    keywords["AS"] = TokenType::KEYWORD_AS;
+    keywords["CREATE"] = TokenType::KEYWORD_CREATE;
+    keywords["TABLE"] = TokenType::KEYWORD_TABLE;
+    keywords["INSERT"] = TokenType::KEYWORD_INSERT;
+    keywords["UPDATE"] = TokenType::KEYWORD_UPDATE;
+    keywords["DELETE"] = TokenType::KEYWORD_DELETE;
+    keywords["QUIT"] = TokenType::KEYWORD_QUIT;
+    keywords["INNER"] = TokenType::KEYWORD_INNER;
+    keywords["LEFT"] = TokenType::KEYWORD_LEFT;
+    keywords["RIGHT"] = TokenType::KEYWORD_RIGHT;
+    keywords["FULL"] = TokenType::KEYWORD_FULL;
+    keywords["OUTER"] = TokenType::KEYWORD_OUTER;
+    keywords["JOIN"] = TokenType::KEYWORD_JOIN;
+    keywords["ON"] = TokenType::KEYWORD_ON;
+
 
 }
 

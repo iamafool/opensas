@@ -259,5 +259,34 @@ public:
     std::unordered_map<std::string, std::string> options; // Options like OBS=, NOOBS, LABEL, etc.
 };
 
+// Base class for SQL statements
+class SQLStatementNode : public ASTNode {};
+
+// Represents the PROC SQL procedure
+class ProcSQLNode : public ASTNode {
+public:
+    std::vector<std::unique_ptr<SQLStatementNode>> statements; // SQL statements within PROC SQL
+};
+
+// Represents a SELECT statement
+class SelectStatementNode : public SQLStatementNode {
+public:
+    std::vector<std::string> selectColumns; // Columns to select
+    std::vector<std::string> fromTables;    // Tables to select from
+    std::unique_ptr<ASTNode> whereCondition; // Optional WHERE condition
+    std::vector<std::string> groupByColumns; // Optional GROUP BY columns
+    std::unique_ptr<ASTNode> havingCondition; // Optional HAVING condition
+    std::vector<std::string> orderByColumns; // Optional ORDER BY columns
+};
+
+// Represents a CREATE TABLE statement
+class CreateTableStatementNode : public SQLStatementNode {
+public:
+    std::string tableName; // Name of the table to create
+    std::vector<std::string> columns; // Columns and their definitions
+};
+
+// Additional SQL statement nodes (INSERT, UPDATE, DELETE) can be added similarly
+
 
 #endif // AST_H
