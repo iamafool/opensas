@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <unordered_set>
 #include <numeric>
+#include <set>
 
 // Execute the entire program
 void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
@@ -90,7 +91,7 @@ void Interpreter::executeDataStep(DataStepNode *node) {
     }
 
     // Check if input dataset exists
-    std::shared_ptr<DataSet> input = nullptr;
+    std::shared_ptr<Dataset> input = nullptr;
     try {
         input = env.getOrCreateDataset(inputLibref, inputDataset);
     }
@@ -100,7 +101,7 @@ void Interpreter::executeDataStep(DataStepNode *node) {
     }
 
     // Create or get the output dataset
-    std::shared_ptr<DataSet> output;
+    std::shared_ptr<Dataset> output;
     try {
         output = env.getOrCreateDataset(outputLibref, outputDataset);
         output->name = node->outputDataSet;
@@ -366,6 +367,9 @@ void Interpreter::executeProc(ProcNode* node) {
     }
     else if (auto procMeans = dynamic_cast<ProcMeansNode*>(node)) {
         executeProcMeans(procMeans);
+    }
+    else if (auto procFreq = dynamic_cast<ProcFreqNode*>(node)) {
+        executeProcFreq(procFreq);
     }
     else {
         if (node->procName == "print") {
@@ -699,13 +703,13 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     logLogger.info("Executing PROC SORT");
 
     // Retrieve the input dataset
-    DataSet* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
     if (!inputDS) {
         throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC SORT.");
     }
 
     // Apply WHERE condition if specified
-    DataSet* filteredDS = inputDS;
+    Dataset* filteredDS = inputDS;
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
         std::string tempDSName = "TEMP_SORT_FILTERED";
@@ -743,7 +747,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
             }));
 
     // Handle NODUPKEY option
-    DataSet* sortedDS = filteredDS;
+    Dataset* sortedDS = filteredDS;
     if (node->nodupkey) {
         std::string tempDSName = "TEMP_SORT_NODUPKEY";
         auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
@@ -813,7 +817,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
     // Determine the output dataset
     std::string outputDSName = node->outputDataSet.empty() ? node->inputDataSet : node->outputDataSet;
-    DataSet* outputDS = env.getOrCreateDataset(outputDSName, outputDSName).get();
+    Dataset* outputDS = env.getOrCreateDataset(outputDSName, outputDSName).get();
     if (outputDSName != sortedDS->name) {
         // Copy sortedDS to outputDS
         outputDS->rows = sortedDS->rows;
@@ -833,13 +837,13 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     logLogger.info("Executing PROC MEANS");
 
     // Retrieve the input dataset
-    DataSet* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
     if (!inputDS) {
         throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC MEANS.");
     }
 
     // Apply WHERE condition if specified
-    DataSet* filteredDS = inputDS;
+    Dataset* filteredDS = inputDS;
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
         std::string tempDSName = "TEMP_MEANS_FILTERED";
@@ -932,7 +936,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     }
 
     // Prepare output dataset if specified
-    DataSet* outputDS = nullptr;
+    Dataset* outputDS = nullptr;
     if (!node->outputDataSet.empty()) {
         outputDS = env.getOrCreateDataset(node->outputDataSet, node->outputDataSet).get();
         outputDS->rows.clear();
@@ -1328,9 +1332,9 @@ void Interpreter::executeMerge(MergeStatementNode* node) {
     }
 
     // Ensure all datasets exist
-    std::vector<DataSet*> mergeDatasets;
+    std::vector<Dataset*> mergeDatasets;
     for (const auto& dsName : node->datasets) {
-        DataSet* ds = env.getOrCreateDataset(dsName, dsName).get();
+        Dataset* ds = env.getOrCreateDataset(dsName, dsName).get();
         if (!ds) {
             throw std::runtime_error("Dataset not found for MERGE: " + dsName);
         }
@@ -1551,3 +1555,167 @@ void Interpreter::executeEnd(EndNode* node) {
     logLogger.info("Exiting DO loop via END statement");
 }
 
+void Interpreter::executeProcFreq(ProcFreqNode* node) {
+    logLogger.info("Executing PROC FREQ");
+
+    // Retrieve the input dataset
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    if (!inputDS) {
+        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC FREQ.");
+    }
+
+    // Apply WHERE condition if specified
+    Dataset* filteredDS = inputDS;
+    if (node->whereCondition) {
+        // Create a temporary dataset to hold filtered rows
+        std::string tempDSName = "TEMP_FREQ_FILTERED";
+        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        tempDS->rows.clear();
+
+        for (const auto& row : inputDS->rows) {
+            env.currentRow = row;
+            Value condValue = evaluate(node->whereCondition.get());
+            bool conditionTrue = false;
+            if (std::holds_alternative<double>(condValue)) {
+                conditionTrue = (std::get<double>(condValue) != 0.0);
+            }
+            else if (std::holds_alternative<std::string>(condValue)) {
+                conditionTrue = (!std::get<std::string>(condValue).empty());
+            }
+            // Add other data types as needed
+
+            if (conditionTrue) {
+                tempDS->rows.push_back(row);
+            }
+        }
+
+        filteredDS = tempDS.get();
+        logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
+    }
+
+    // Process each table specification
+    for (const auto& tablePair : node->tables) {
+        std::string tableSpec = tablePair.first;
+        std::vector<std::string> tableOptions = tablePair.second;
+
+        // Split tableSpec into variables, e.g., var1 or var1*var2
+        std::vector<std::string> vars;
+        size_t starPos = tableSpec.find('*');
+        if (starPos != std::string::npos) {
+            vars.push_back(tableSpec.substr(0, starPos));
+            vars.push_back(tableSpec.substr(starPos + 1));
+        }
+        else {
+            vars.push_back(tableSpec);
+        }
+
+        if (vars.size() == 1) {
+            // Single variable frequency table
+            std::map<std::string, int> freqMap;
+            for (const auto& row : filteredDS->rows) {
+                auto it = row.columns.find(vars[0]);
+                if (it != row.columns.end()) {
+                    std::string key;
+                    if (std::holds_alternative<double>(it->second)) {
+                        key = std::to_string(std::get<double>(it->second));
+                    }
+                    else if (std::holds_alternative<std::string>(it->second)) {
+                        key = std::get<std::string>(it->second);
+                    }
+                    // Handle other data types as needed
+
+                    freqMap[key]++;
+                }
+            }
+
+            // Log frequency table
+            std::stringstream ss;
+            ss << "Frequency Table for Variable: " << vars[0] << "\n";
+            ss << "Value\tFrequency\n";
+            for (const auto& pair : freqMap) {
+                ss << pair.first << "\t" << pair.second << "\n";
+            }
+            logLogger.info(ss.str());
+
+            // Handle OUTPUT options if any (e.g., OUT=)
+            // This implementation focuses on logging frequencies. Extending to output datasets can be added here.
+        }
+        else if (vars.size() == 2) {
+            // Cross-tabulation
+            std::map<std::string, std::map<std::string, int>> crosstab;
+            std::set<std::string> var1Levels;
+            std::set<std::string> var2Levels;
+
+            for (const auto& row : filteredDS->rows) {
+                auto it1 = row.columns.find(vars[0]);
+                auto it2 = row.columns.find(vars[1]);
+
+                if (it1 != row.columns.end() && it2 != row.columns.end()) {
+                    std::string key1, key2;
+                    if (std::holds_alternative<double>(it1->second)) {
+                        key1 = std::to_string(std::get<double>(it1->second));
+                    }
+                    else if (std::holds_alternative<std::string>(it1->second)) {
+                        key1 = std::get<std::string>(it1->second);
+                    }
+
+                    if (std::holds_alternative<double>(it2->second)) {
+                        key2 = std::to_string(std::get<double>(it2->second));
+                    }
+                    else if (std::holds_alternative<std::string>(it2->second)) {
+                        key2 = std::get<std::string>(it2->second);
+                    }
+
+                    crosstab[key1][key2]++;
+                    var1Levels.insert(key1);
+                    var2Levels.insert(key2);
+                }
+            }
+
+            // Log cross-tabulation table
+            std::stringstream ss;
+            ss << "Cross-Tabulation Table for Variables: " << vars[0] << " * " << vars[1] << "\n";
+            ss << vars[0] << "\\" << vars[1] << "\t";
+
+            for (const auto& var2Level : var2Levels) {
+                ss << var2Level << "\t";
+            }
+            ss << "\n";
+
+            for (const auto& var1Level : var1Levels) {
+                ss << var1Level << "\t";
+                for (const auto& var2Level : var2Levels) {
+                    int count = 0;
+                    auto it = crosstab.find(var1Level);
+                    if (it != crosstab.end()) {
+                        auto it2 = it->second.find(var2Level);
+                        if (it2 != it->second.end()) {
+                            count = it2->second;
+                        }
+                    }
+                    ss << count << "\t";
+                }
+                ss << "\n";
+            }
+
+            logLogger.info(ss.str());
+
+            // Handle OPTIONS like CHISQ
+            for (const auto& option : tableOptions) {
+                if (option == "CHISQ") {
+                    // Perform Chi-Square Test
+                    // This is a simplified implementation. In practice, you would calculate the Chi-Square statistic.
+                    logLogger.info("Chi-Square test requested for the cross-tabulation.");
+                    // Placeholder for Chi-Square calculation
+                }
+                // Handle other options as needed
+            }
+
+            // Handle OUTPUT options if any (e.g., OUT=)
+            // This implementation focuses on logging cross-tabulation. Extending to output datasets can be added here.
+        }
+        else {
+            logLogger.warn("Unsupported number of variables in TABLES statement: {}", vars.size());
+        }
+    }
+}

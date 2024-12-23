@@ -343,6 +343,9 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
     else if (t.type == TokenType::KEYWORD_MEANS) {
         return parseProcMeans();
     }
+    else if (t.type == TokenType::KEYWORD_FREQ) {
+        return parseProcFreq();
+    }
     else {
         node->procName = consume(TokenType::IDENTIFIER, "Expected PROC name").text;
         consume(TokenType::SEMICOLON, "Expected ';' after PROC name");
@@ -787,4 +790,66 @@ std::unique_ptr<ASTNode> Parser::parseProcMeans() {
     consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
 
     return procMeansNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseProcFreq() {
+    auto procFreqNode = std::make_unique<ProcFreqNode>();
+    consume(TokenType::KEYWORD_FREQ, "Expected 'FREQ' keyword after 'PROC'");
+
+    // Parse DATA= option
+    if (match(TokenType::KEYWORD_DATA)) {
+        consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC FREQ");
+        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
+        procFreqNode->inputDataSet = dataToken.text;
+    }
+    else {
+        throw std::runtime_error("PROC FREQ requires a DATA= option");
+    }
+
+    // Parse TABLES statement
+    if (match(TokenType::KEYWORD_TABLES)) {
+        consume(TokenType::KEYWORD_TABLES, "Expected 'TABLES' keyword in PROC FREQ");
+        while (peek().type == TokenType::IDENTIFIER || peek().type == TokenType::STAR) {
+            std::string table;
+            // Parse table specification, e.g., var1 or var1*var2
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in TABLES statement");
+            table += varToken.text;
+
+            if (match(TokenType::STAR)) {
+                consume(TokenType::STAR, "Expected '*' in TABLES statement for cross-tabulation");
+                Token var2Token = consume(TokenType::IDENTIFIER, "Expected second variable name in TABLES statement");
+                table += "*" + var2Token.text;
+            }
+
+            // Parse options after '/' if present
+            std::vector<std::string> options;
+            if (match(TokenType::SLASH)) { // Assuming '/' is tokenized as SLASH
+                consume(TokenType::SLASH, "Expected '/' before TABLES options");
+                while (peek().type == TokenType::IDENTIFIER) {
+                    Token optionToken = consume(TokenType::IDENTIFIER, "Expected option in TABLES statement");
+                    options.push_back(optionToken.text);
+                    // Handle options with parameters if necessary, e.g., chisq
+                }
+            }
+
+            procFreqNode->tables.emplace_back(std::make_pair(table, options));
+        }
+    }
+    else {
+        throw std::runtime_error("PROC FREQ requires a TABLES statement");
+    }
+
+    // Parse optional WHERE statement
+    if (match(TokenType::KEYWORD_WHERE)) {
+        consume(TokenType::KEYWORD_WHERE, "Expected 'WHERE' keyword in PROC FREQ");
+        consume(TokenType::LPAREN, "Expected '(' after 'WHERE'");
+        procFreqNode->whereCondition = parseExpression(); // Parse condition expression
+        consume(TokenType::RPAREN, "Expected ')' after 'WHERE' condition");
+    }
+
+    // Expect RUN; statement
+    consume(TokenType::KEYWORD_RUN, "Expected 'RUN;' to terminate PROC FREQ");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
+
+    return procFreqNode;
 }

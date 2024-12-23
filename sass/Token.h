@@ -48,6 +48,12 @@ namespace sass {
         KEYWORD_N,
         KEYWORD_NOMISSING,
         KEYWORD_STD,
+        KEYWORD_TABLES,
+        KEYWORD_CHISQ,
+        KEYWORD_NOCUM,
+        KEYWORD_NOPRINT,
+        KEYWORD_ORDER,
+        KEYWORD_FREQ,
 
         EQUAL,
         SEMICOLON,
@@ -69,12 +75,13 @@ namespace sass {
         NOT,
         AND,
         OR,
-
+        STAR,
         PLUS,
         MINUS,
         MUL,
         DIV,
         EOF_TOKEN,
+        SLASH,
         UNKNOWN
     };
 

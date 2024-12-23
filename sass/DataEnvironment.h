@@ -20,7 +20,7 @@ struct Row {
 };
 
 // Represents a dataset containing multiple rows
-class DataSet {
+class Dataset {
 public:
     std::string name;
     std::vector<Row> rows;
@@ -76,13 +76,13 @@ public:
 class DataEnvironment {
 public:
     // Store datasets by name
-    std::unordered_map<std::string, std::shared_ptr<DataSet>> dataSets;
+    std::unordered_map<std::string, std::shared_ptr<Dataset>> dataSets;
 
     // Current row being processed in a DATA step
     Row currentRow;
 
     // Current data set
-    std::shared_ptr<DataSet> currentDataSet;
+    std::shared_ptr<Dataset> currentDataSet;
 
     // Global settings
     std::unordered_map<std::string, std::string> options;
@@ -105,7 +105,7 @@ public:
     }
 
     // Retrieve or create a dataset
-    std::shared_ptr<DataSet> getOrCreateDataset(const std::string &libref, const std::string &datasetName) {
+    std::shared_ptr<Dataset> getOrCreateDataset(const std::string &libref, const std::string &datasetName) {
         std::string fullName = resolveLibref(libref, datasetName);
         auto it = dataSets.find(fullName);
         if (it != dataSets.end()) {
@@ -113,7 +113,7 @@ public:
         }
         else {
             // Create a new dataset
-            auto dataset = std::make_shared<DataSet>();
+            auto dataset = std::make_shared<Dataset>();
             dataset->name = fullName;
             dataSets[fullName] = dataset;
             return dataset;
@@ -224,11 +224,11 @@ public:
         return tokens;
     }
 
-    void setCurrentDataSet(std::shared_ptr<DataSet> ds) {
+    void setCurrentDataSet(std::shared_ptr<Dataset> ds) {
         currentDataSet = ds;
     }
 
-    std::shared_ptr<DataSet> getCurrentDataSet() {
+    std::shared_ptr<Dataset> getCurrentDataSet() {
         return currentDataSet;
     }
 

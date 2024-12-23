@@ -33,6 +33,12 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["VAR"] = TokenType::KEYWORD_VAR;
     keywords["WHERE"] = TokenType::KEYWORD_WHERE;
     keywords["WHILE"] = TokenType::KEYWORD_WHILE;
+    keywords["FREQ"] = TokenType::KEYWORD_FREQ;
+    keywords["TABLES"] = TokenType::KEYWORD_TABLES;
+    keywords["CHISQ"] = TokenType::KEYWORD_CHISQ;
+    keywords["NOCUM"] = TokenType::KEYWORD_NOCUM;
+    keywords["NOPRINT"] = TokenType::KEYWORD_NOPRINT;
+    keywords["ORDER"] = TokenType::KEYWORD_ORDER;
 
 }
 

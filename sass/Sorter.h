@@ -9,7 +9,7 @@
 class Sorter {
 public:
     // Sorts the dataset by the specified variables
-    static void sortDataset(DataSet* dataset, const std::vector<std::string>& byVariables) {
+    static void sortDataset(Dataset* dataset, const std::vector<std::string>& byVariables) {
         std::sort(dataset->rows.begin(), dataset->rows.end(),
             [&](const Row& a, const Row& b) -> bool {
                 for (const auto& var : byVariables) {

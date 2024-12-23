@@ -242,4 +242,14 @@ public:
     // Can include labels or other attributes if needed
 };
 
+// Represents the PROC FREQ procedure
+class ProcFreqNode : public ASTNode {
+public:
+    std::string inputDataSet;                              // Dataset to analyze (DATA=)
+    std::vector<std::pair<std::string, std::vector<std::string>>> tables; // Tables to generate, e.g., var1*var2
+    std::unique_ptr<ASTNode> whereCondition;        // Optional WHERE condition
+    std::vector<std::string> options;                      // Options for the TABLES statement
+};
+
+
 #endif // AST_H
