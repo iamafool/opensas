@@ -35,6 +35,11 @@ namespace sass {
         KEYWORD_WHILE,
         KEYWORD_UNTIL,
         KEYWORD_END,
+        KEYWORD_SORT,
+        KEYWORD_OUT,
+        KEYWORD_WHERE,
+        KEYWORD_NODUPKEY,
+        KEYWORD_DUPLICATES,
 
         EQUALS,
         SEMICOLON,

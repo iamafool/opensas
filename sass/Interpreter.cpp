@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <unordered_set>
+#include <numeric>
 
 // Execute the entire program
 void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
@@ -360,55 +361,56 @@ void Interpreter::executeTitle(TitleNode* node) {
 
 // Execute a PROC step
 void Interpreter::executeProc(ProcNode* node) {
-    if (node->procName == "print") {
-        logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
-        try {
-            auto dataset = env.getOrCreateDataset("", node->datasetName);
-            lstLogger.info("PROC PRINT Results for Dataset '{}':", dataset->name);
-            if (!env.title.empty()) {
-                lstLogger.info("Title: {}", env.title);
-            }
-
-            // Print column headers
-            std::string header;
-            for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
-                header += dataset->columnOrder[i];
-                if (i < dataset->columnOrder.size() - 1) header += "\t";
-            }
-            lstLogger.info("{}", header);
-
-            // Print rows
-            int obs = 1;
-            for (const auto& row : dataset->rows) {
-                std::string rowStr = std::to_string(obs++) + "\t";
-                for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
-                    const std::string& col = dataset->columnOrder[i];
-                    auto it = row.columns.find(col);
-                    if (it != row.columns.end()) {
-                        rowStr += toString(it->second);
-                    }
-                    else {
-                        rowStr += ".";
-                    }
-                    if (i < dataset->columnOrder.size() - 1) rowStr += "\t";
-                }
-                lstLogger.info("{}", rowStr);
-            }
-        }
-        catch (const std::runtime_error& e) {
-            logLogger.error("PROC PRINT failed: {}", e.what());
-        }
-    }
-    else if (node->procName == "sort") {
-        // Should not reach here; PROC SORT is handled as ProcSortNode
-        throw std::runtime_error("PROC SORT should be handled as ProcSortNode");
-    }
-    else if (node->procName == "means") {
-        // Should not reach here; PROC MEANS is handled as ProcMeansNode
-        throw std::runtime_error("PROC MEANS should be handled as ProcMeansNode");
+    if (auto procSort = dynamic_cast<ProcSortNode*>(node)) {
+        executeProcSort(procSort);
     }
     else {
-        logLogger.error("Unsupported PROC: {}", node->procName);
+        if (node->procName == "print") {
+            logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
+            try {
+                auto dataset = env.getOrCreateDataset("", node->datasetName);
+                lstLogger.info("PROC PRINT Results for Dataset '{}':", dataset->name);
+                if (!env.title.empty()) {
+                    lstLogger.info("Title: {}", env.title);
+                }
+
+                // Print column headers
+                std::string header;
+                for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
+                    header += dataset->columnOrder[i];
+                    if (i < dataset->columnOrder.size() - 1) header += "\t";
+                }
+                lstLogger.info("{}", header);
+
+                // Print rows
+                int obs = 1;
+                for (const auto& row : dataset->rows) {
+                    std::string rowStr = std::to_string(obs++) + "\t";
+                    for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
+                        const std::string& col = dataset->columnOrder[i];
+                        auto it = row.columns.find(col);
+                        if (it != row.columns.end()) {
+                            rowStr += toString(it->second);
+                        }
+                        else {
+                            rowStr += ".";
+                        }
+                        if (i < dataset->columnOrder.size() - 1) rowStr += "\t";
+                    }
+                    lstLogger.info("{}", rowStr);
+                }
+            }
+            catch (const std::runtime_error& e) {
+                logLogger.error("PROC PRINT failed: {}", e.what());
+            }
+        }
+        else if (node->procName == "means") {
+            // Should not reach here; PROC MEANS is handled as ProcMeansNode
+            throw std::runtime_error("PROC MEANS should be handled as ProcMeansNode");
+        }
+        else {
+            logLogger.error("Unsupported PROC: {}", node->procName);
+        }
     }
 }
 
@@ -695,38 +697,137 @@ void Interpreter::executeDo(DoNode* node) {
 }
 
 void Interpreter::executeProcSort(ProcSortNode* node) {
-    logLogger.info("Executing PROC SORT on dataset '{}'.", node->datasetName);
-    try {
-        auto dataset = env.getOrCreateDataset("", node->datasetName);
-        // Perform the sort based on byVariables
-        std::sort(dataset->rows.begin(), dataset->rows.end(),
-            [&](const Row& a, const Row& b) -> bool {
-                for (const auto& var : node->byVariables) {
-                    auto itA = a.columns.find(var);
-                    auto itB = b.columns.find(var);
-                    if (itA == a.columns.end() || itB == b.columns.end()) continue; // Missing variables are ignored
-                    if (std::holds_alternative<double>(itA->second) && std::holds_alternative<double>(itB->second)) {
-                        double valA = std::get<double>(itA->second);
-                        double valB = std::get<double>(itB->second);
-                        if (valA < valB) return true;
-                        if (valA > valB) return false;
-                    }
-                    else {
-                        std::string valA = std::get<std::string>(itA->second);
-                        std::string valB = std::get<std::string>(itB->second);
-                        if (valA < valB) return true;
-                        if (valA > valB) return false;
-                    }
-                    // If equal, proceed to next 'by' variable
-                }
-                return false; // All 'by' variables are equal
-            });
+    logLogger.info("Executing PROC SORT");
 
-        logLogger.info("PROC SORT completed on dataset '{}'.", node->datasetName);
+    // Retrieve the input dataset
+    DataSet* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    if (!inputDS) {
+        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC SORT.");
     }
-    catch (const std::runtime_error& e) {
-        logLogger.error("PROC SORT failed: {}", e.what());
+
+    // Apply WHERE condition if specified
+    DataSet* filteredDS = inputDS;
+    if (node->whereCondition) {
+        // Create a temporary dataset to hold filtered rows
+        std::string tempDSName = "TEMP_SORT_FILTERED";
+        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        tempDS->rows.clear();
+
+        for (const auto& row : inputDS->rows) {
+            env.currentRow = row;
+            Value condValue = evaluate(node->whereCondition.get());
+            bool conditionTrue = false;
+            if (std::holds_alternative<double>(condValue)) {
+                conditionTrue = (std::get<double>(condValue) != 0.0);
+            }
+            else if (std::holds_alternative<std::string>(condValue)) {
+                conditionTrue = (!std::get<std::string>(condValue).empty());
+            }
+            // Add other data types as needed
+
+            if (conditionTrue) {
+                tempDS->rows.push_back(row);
+            }
+        }
+
+        filteredDS = tempDS.get();
+        logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
     }
+
+    // Sort the filtered dataset by BY variables
+    Sorter::sortDataset(filteredDS, node->byVariables);
+    logLogger.info("Sorted dataset '{}' by variables: {}",
+        filteredDS->name,
+        std::accumulate(node->byVariables.begin(), node->byVariables.end(), std::string(),
+            [](const std::string& a, const std::string& b) -> std::string {
+                return a.empty() ? b : a + ", " + b;
+            }));
+
+    // Handle NODUPKEY option
+    DataSet* sortedDS = filteredDS;
+    if (node->nodupkey) {
+        std::string tempDSName = "TEMP_SORT_NODUPKEY";
+        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        tempDS->rows.clear();
+
+        std::unordered_set<std::string> seenKeys;
+        for (const auto& row : sortedDS->rows) {
+            std::string key = "";
+            for (const auto& var : node->byVariables) {
+                auto it = row.columns.find(var);
+                if (it != row.columns.end()) {
+                    if (std::holds_alternative<double>(it->second)) {
+                        key += std::to_string(std::get<double>(it->second)) + "_";
+                    }
+                    else if (std::holds_alternative<std::string>(it->second)) {
+                        key += std::get<std::string>(it->second) + "_";
+                    }
+                    // Handle other data types as needed
+                }
+                else {
+                    key += "NA_";
+                }
+            }
+
+            if (seenKeys.find(key) == seenKeys.end()) {
+                tempDS->rows.push_back(row);
+                seenKeys.insert(key);
+            }
+            else {
+                logLogger.info("Duplicate key '{}' found. Skipping duplicate observation.", key);
+            }
+        }
+
+        sortedDS = tempDS.get();
+        logLogger.info("Applied NODUPKEY option. {} observations remain after removing duplicates.", sortedDS->rows.size());
+    }
+
+    // Handle DUPLICATES option
+    if (node->duplicates) {
+        std::unordered_set<std::string> seenKeys;
+        for (const auto& row : sortedDS->rows) {
+            std::string key = "";
+            for (const auto& var : node->byVariables) {
+                auto it = row.columns.find(var);
+                if (it != row.columns.end()) {
+                    if (std::holds_alternative<double>(it->second)) {
+                        key += std::to_string(std::get<double>(it->second)) + "_";
+                    }
+                    else if (std::holds_alternative<std::string>(it->second)) {
+                        key += std::get<std::string>(it->second) + "_";
+                    }
+                    // Handle other data types as needed
+                }
+                else {
+                    key += "NA_";
+                }
+            }
+
+            if (seenKeys.find(key) != seenKeys.end()) {
+                logLogger.info("Duplicate key '{}' found.", key);
+            }
+            else {
+                seenKeys.insert(key);
+            }
+        }
+    }
+
+    // Determine the output dataset
+    std::string outputDSName = node->outputDataSet.empty() ? node->inputDataSet : node->outputDataSet;
+    DataSet* outputDS = env.getOrCreateDataset(outputDSName, outputDSName).get();
+    if (outputDSName != sortedDS->name) {
+        // Copy sortedDS to outputDS
+        outputDS->rows = sortedDS->rows;
+        logLogger.info("Sorted data copied to output dataset '{}'.", outputDSName);
+    }
+    else {
+        // Overwrite the input dataset
+        inputDS->rows = sortedDS->rows;
+        logLogger.info("Input dataset '{}' overwritten with sorted data.", inputDS->name);
+    }
+
+    logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
+        outputDSName, outputDS->rows.size());
 }
 
 void Interpreter::executeProcMeans(ProcMeansNode* node) {

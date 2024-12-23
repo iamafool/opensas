@@ -16,6 +16,14 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["WHILE"] = TokenType::KEYWORD_WHILE;
     keywords["UNTIL"] = TokenType::KEYWORD_UNTIL;
     keywords["END"] = TokenType::KEYWORD_END;
+    keywords["PROC"] = TokenType::KEYWORD_PROC;
+    keywords["SORT"] = TokenType::KEYWORD_SORT;
+    keywords["BY"] = TokenType::KEYWORD_BY;
+    keywords["OUT"] = TokenType::KEYWORD_OUT;
+    keywords["WHERE"] = TokenType::KEYWORD_WHERE;
+    keywords["NODUPKEY"] = TokenType::KEYWORD_NODUPKEY;
+    keywords["DUPLICATES"] = TokenType::KEYWORD_DUPLICATES;
+    keywords["RUN"] = TokenType::KEYWORD_RUN;
 
 }
 

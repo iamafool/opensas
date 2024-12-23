@@ -335,104 +335,75 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
     // proc <procName>; <procStatements>; run;
     auto node = std::make_unique<ProcNode>();
     consume(TokenType::KEYWORD_PROC, "Expected 'proc'");
-    node->procName = consume(TokenType::IDENTIFIER, "Expected PROC name").text;
-    consume(TokenType::SEMICOLON, "Expected ';' after PROC name");
 
-    // For simplicity, handle only 'print' PROC with optional DATA= option
-    if (node->procName == "print") {
-        // Expect 'data=<dataset>'
-        if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
-            advance(); // Consume 'data'
-            consume(TokenType::EQUALS, "Expected '=' after 'data'");
-            node->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
-            consume(TokenType::SEMICOLON, "Expected ';' after dataset name");
-        }
-
-        // Parse PROC-specific statements until 'run;'
-        while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
-            // Implement PROC-specific parsing as needed
-            // For simplicity, skip or throw error
-            throw std::runtime_error("Unsupported PROC statement: " + peek().text);
-        }
-
-        consume(TokenType::KEYWORD_RUN, "Expected 'run'");
-        consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
-    }
-    else if (node->procName == "sort") {
-        // Handle PROC SORT
-        auto sortNode = std::make_unique<ProcSortNode>();
-        // Expect 'data=<dataset>'
-        if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
-            consume(TokenType::IDENTIFIER, "Expected 'data' in PROC SORT");
-            consume(TokenType::EQUALS, "Expected '=' after 'data'");
-            sortNode->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
-        }
-        else {
-            throw std::runtime_error("Expected 'data=<dataset>' in PROC SORT");
-        }
-
-        // Expect 'by var1 var2 ...;'
-        consume(TokenType::KEYWORD_BY, "Expected 'by' in PROC SORT");
-        while (peek().type == TokenType::IDENTIFIER) {
-            sortNode->byVariables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in 'by' statement").text);
-        }
-        consume(TokenType::SEMICOLON, "Expected ';' after 'by' statement");
-
-        // Parse until 'run;'
-        while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
-            // Currently, PROC SORT doesn't support additional statements
-            // Throw error if unexpected statements are found
-            throw std::runtime_error("Unsupported statement in PROC SORT");
-        }
-
-        consume(TokenType::KEYWORD_RUN, "Expected 'run'");
-        consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
-
-        // Convert ProcSortNode to ProcNode for consistency
-        auto finalSortNode = std::make_unique<ProcSortNode>();
-        finalSortNode->datasetName = sortNode->datasetName;
-        finalSortNode->byVariables = sortNode->byVariables;
-        return finalSortNode;
-    }
-    else if (node->procName == "means") {
-        // Handle PROC MEANS
-        auto meansNode = std::make_unique<ProcMeansNode>();
-        // Expect 'data=<dataset>'
-        if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
-            consume(TokenType::IDENTIFIER, "Expected 'data' in PROC MEANS");
-            consume(TokenType::EQUALS, "Expected '=' after 'data'");
-            meansNode->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
-        }
-        else {
-            throw std::runtime_error("Expected 'data=<dataset>' in PROC MEANS");
-        }
-
-        // Expect 'var var1 var2 ...;'
-        consume(TokenType::KEYWORD_VAR, "Expected 'var' in PROC MEANS");
-        while (peek().type == TokenType::IDENTIFIER) {
-            meansNode->varNames.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in 'var' statement").text);
-        }
-        consume(TokenType::SEMICOLON, "Expected ';' after 'var' statement");
-
-        // Parse until 'run;'
-        while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
-            // Currently, PROC MEANS doesn't support additional statements
-            // Throw error if unexpected statements are found
-            throw std::runtime_error("Unsupported statement in PROC MEANS");
-        }
-
-        consume(TokenType::KEYWORD_RUN, "Expected 'run'");
-        consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
-
-        // Convert ProcMeansNode to ProcNode for consistency
-        auto finalMeansNode = std::make_unique<ProcMeansNode>();
-        finalMeansNode->datasetName = meansNode->datasetName;
-        finalMeansNode->varNames = meansNode->varNames;
-        return finalMeansNode;
+    Token t = peek();
+    if (t.type == TokenType::KEYWORD_SORT) {
+        return parseProcSort();
     }
     else {
-        // Unsupported PROC
-        throw std::runtime_error("Unsupported PROC: " + node->procName);
+        node->procName = consume(TokenType::IDENTIFIER, "Expected PROC name").text;
+        consume(TokenType::SEMICOLON, "Expected ';' after PROC name");
+
+        // For simplicity, handle only 'print' PROC with optional DATA= option
+        if (node->procName == "print") {
+            // Expect 'data=<dataset>'
+            if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
+                advance(); // Consume 'data'
+                consume(TokenType::EQUALS, "Expected '=' after 'data'");
+                node->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
+                consume(TokenType::SEMICOLON, "Expected ';' after dataset name");
+            }
+
+            // Parse PROC-specific statements until 'run;'
+            while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
+                // Implement PROC-specific parsing as needed
+                // For simplicity, skip or throw error
+                throw std::runtime_error("Unsupported PROC statement: " + peek().text);
+            }
+
+            consume(TokenType::KEYWORD_RUN, "Expected 'run'");
+            consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
+        }
+        else if (node->procName == "means") {
+            // Handle PROC MEANS
+            auto meansNode = std::make_unique<ProcMeansNode>();
+            // Expect 'data=<dataset>'
+            if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
+                consume(TokenType::IDENTIFIER, "Expected 'data' in PROC MEANS");
+                consume(TokenType::EQUALS, "Expected '=' after 'data'");
+                meansNode->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
+            }
+            else {
+                throw std::runtime_error("Expected 'data=<dataset>' in PROC MEANS");
+            }
+
+            // Expect 'var var1 var2 ...;'
+            consume(TokenType::KEYWORD_VAR, "Expected 'var' in PROC MEANS");
+            while (peek().type == TokenType::IDENTIFIER) {
+                meansNode->varNames.push_back(consume(TokenType::IDENTIFIER, "Expected variable name in 'var' statement").text);
+            }
+            consume(TokenType::SEMICOLON, "Expected ';' after 'var' statement");
+
+            // Parse until 'run;'
+            while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
+                // Currently, PROC MEANS doesn't support additional statements
+                // Throw error if unexpected statements are found
+                throw std::runtime_error("Unsupported statement in PROC MEANS");
+            }
+
+            consume(TokenType::KEYWORD_RUN, "Expected 'run'");
+            consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
+
+            // Convert ProcMeansNode to ProcNode for consistency
+            auto finalMeansNode = std::make_unique<ProcMeansNode>();
+            finalMeansNode->datasetName = meansNode->datasetName;
+            finalMeansNode->varNames = meansNode->varNames;
+            return finalMeansNode;
+        }
+        else {
+            // Unsupported PROC
+            throw std::runtime_error("Unsupported PROC: " + node->procName);
+        }
     }
 
     return node;
@@ -701,4 +672,64 @@ std::unique_ptr<ASTNode> Parser::parseDoLoop() {
     consume(TokenType::SEMICOLON, "Expected ';' after 'END'");
 
     return doLoopNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseProcSort() {
+    auto procSortNode = std::make_unique<ProcSortNode>();
+    consume(TokenType::KEYWORD_SORT, "Expected 'SORT' keyword after 'PROC'");
+
+    // Parse DATA= option
+    if (match(TokenType::KEYWORD_DATA)) {
+        consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC SORT");
+        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
+        procSortNode->inputDataSet = dataToken.text;
+    }
+    else {
+        throw std::runtime_error("PROC SORT requires a DATA= option");
+    }
+
+    // Parse OUT= option (optional)
+    if (match(TokenType::KEYWORD_OUT)) {
+        consume(TokenType::KEYWORD_OUT, "Expected 'OUT=' option in PROC SORT");
+        Token outToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'OUT='");
+        procSortNode->outputDataSet = outToken.text;
+    }
+
+    // Parse BY statement
+    if (match(TokenType::KEYWORD_BY)) {
+        consume(TokenType::KEYWORD_BY, "Expected 'BY' keyword in PROC SORT");
+        while (peek().type == TokenType::IDENTIFIER) {
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in BY statement");
+            procSortNode->byVariables.push_back(varToken.text);
+        }
+    }
+    else {
+        throw std::runtime_error("PROC SORT requires a BY statement");
+    }
+
+    // Parse optional WHERE statement
+    if (match(TokenType::KEYWORD_WHERE)) {
+        consume(TokenType::KEYWORD_WHERE, "Expected 'WHERE' keyword in PROC SORT");
+        consume(TokenType::LPAREN, "Expected '(' after 'WHERE'");
+        procSortNode->whereCondition = parseExpression(); // Parse condition expression
+        consume(TokenType::RPAREN, "Expected ')' after 'WHERE' condition");
+    }
+
+    // Parse optional NODUPKEY and DUPLICATES options
+    while (match(TokenType::KEYWORD_NODUPKEY) || match(TokenType::KEYWORD_DUPLICATES)) {
+        if (match(TokenType::KEYWORD_NODUPKEY)) {
+            consume(TokenType::KEYWORD_NODUPKEY, "Expected 'NODUPKEY' keyword");
+            procSortNode->nodupkey = true;
+        }
+        if (match(TokenType::KEYWORD_DUPLICATES)) {
+            consume(TokenType::KEYWORD_DUPLICATES, "Expected 'DUPLICATES' keyword");
+            procSortNode->duplicates = true;
+        }
+    }
+
+    // Expect RUN; statement
+    consume(TokenType::KEYWORD_RUN, "Expected 'RUN;' to terminate PROC SORT");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
+
+    return procSortNode;
 }

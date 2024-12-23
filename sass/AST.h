@@ -11,6 +11,12 @@ public:
     virtual ~ASTNode() {}
 };
 
+// Expression nodes
+class ExpressionNode : public ASTNode {
+public:
+    virtual ~ExpressionNode() = default;
+};
+
 // Represents a DATA step block: data <dataset>; set <source>; <statements>; run;
 class DataStepNode : public ASTNode {
 public:
@@ -165,8 +171,12 @@ class EndDoNode : public ASTNode {};
 // Represents a PROC SORT step: proc sort data=<dataset>; by <variables>; run;
 class ProcSortNode : public ASTNode {
 public:
-    std::string datasetName;
-    std::vector<std::string> byVariables;
+    std::string inputDataSet;    // Dataset to sort (DATA=)
+    std::string outputDataSet;   // Output dataset (OUT=), can be empty
+    std::vector<std::string> byVariables; // Variables to sort by
+    std::unique_ptr<ASTNode> whereCondition; // Optional WHERE condition
+    bool nodupkey;               // Flag for NODUPKEY option
+    bool duplicates;             // Flag for DUPLICATES option
 };
 
 // Represents a PROC MEANS step: proc means data=<dataset>; var <variables>; run;
