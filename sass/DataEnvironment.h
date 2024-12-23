@@ -10,6 +10,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <map>
 
 // Define a variant type to hold different data types
 using Value = std::variant<double, std::string>;
@@ -19,11 +20,17 @@ struct Row {
     std::unordered_map<std::string, Value> columns;
 };
 
+// Represents a single column in the dataset. It maps column names to their values.
+using Column = std::vector<Value>;
+
 // Represents a dataset containing multiple rows
 class Dataset {
 public:
     std::string name;
     std::vector<Row> rows;
+
+    // Columns in the dataset: column name mapped to its data values.
+    std::map<std::string, Column> columns;
 
     // Optional: Define column order for consistent output
     std::vector<std::string> columnOrder;

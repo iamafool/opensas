@@ -251,5 +251,13 @@ public:
     std::vector<std::string> options;                      // Options for the TABLES statement
 };
 
+// Represents the PROC PRINT procedure
+class ProcPrintNode : public ASTNode {
+public:
+    std::string inputDataSet;                    // Dataset to print (DATA=)
+    std::vector<std::string> varVariables;       // Variables to display (VAR statement), optional
+    std::unordered_map<std::string, std::string> options; // Options like OBS=, NOOBS, LABEL, etc.
+};
+
 
 #endif // AST_H

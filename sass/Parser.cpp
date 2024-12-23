@@ -346,34 +346,11 @@ std::unique_ptr<ASTNode> Parser::parseProc() {
     else if (t.type == TokenType::KEYWORD_FREQ) {
         return parseProcFreq();
     }
+    else if (t.type == TokenType::KEYWORD_PRINT) {
+        return parseProcPrint();
+    }
     else {
-        node->procName = consume(TokenType::IDENTIFIER, "Expected PROC name").text;
-        consume(TokenType::SEMICOLON, "Expected ';' after PROC name");
-
-        // For simplicity, handle only 'print' PROC with optional DATA= option
-        if (node->procName == "print") {
-            // Expect 'data=<dataset>'
-            if (peek().type == TokenType::IDENTIFIER && peek().text == "data") {
-                advance(); // Consume 'data'
-                consume(TokenType::EQUAL, "Expected '=' after 'data'");
-                node->datasetName = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
-                consume(TokenType::SEMICOLON, "Expected ';' after dataset name");
-            }
-
-            // Parse PROC-specific statements until 'run;'
-            while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
-                // Implement PROC-specific parsing as needed
-                // For simplicity, skip or throw error
-                throw std::runtime_error("Unsupported PROC statement: " + peek().text);
-            }
-
-            consume(TokenType::KEYWORD_RUN, "Expected 'run'");
-            consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
-        }
-        else {
-            // Unsupported PROC
-            throw std::runtime_error("Unsupported PROC: " + node->procName);
-        }
+        throw std::runtime_error("Unsupported PROC type: " + t.text);
     }
 
     return node;
@@ -853,3 +830,55 @@ std::unique_ptr<ASTNode> Parser::parseProcFreq() {
 
     return procFreqNode;
 }
+
+
+std::unique_ptr<ASTNode> Parser::parseProcPrint() {
+    auto procPrintNode = std::make_unique<ProcPrintNode>();
+    consume(TokenType::KEYWORD_PRINT, "Expected 'PRINT' keyword after 'PROC'");
+
+    // Parse DATA= option
+    if (match(TokenType::KEYWORD_DATA)) {
+        consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC PRINT");
+        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
+        procPrintNode->inputDataSet = dataToken.text;
+    }
+    else {
+        throw std::runtime_error("PROC PRINT requires a DATA= option");
+    }
+
+    // Parse VAR statement (optional)
+    if (match(TokenType::KEYWORD_VAR)) {
+        consume(TokenType::KEYWORD_VAR, "Expected 'VAR' keyword in PROC PRINT");
+        while (peek().type == TokenType::IDENTIFIER) {
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in VAR statement");
+            procPrintNode->varVariables.push_back(varToken.text);
+        }
+    }
+
+    // Parse options (optional)
+    while (match(TokenType::KEYWORD_OBS) ||
+        match(TokenType::KEYWORD_NOOBS) ||
+        match(TokenType::KEYWORD_LABEL)) {
+        if (match(TokenType::KEYWORD_OBS)) {
+            consume(TokenType::KEYWORD_OBS, "Expected 'OBS=' option");
+            Token eqToken = consume(TokenType::EQUAL, "Expected '=' after 'OBS'");
+            Token numToken = consume(TokenType::NUMBER, "Expected number after 'OBS='");
+            procPrintNode->options["OBS"] = numToken.text;
+        }
+        if (match(TokenType::KEYWORD_NOOBS)) {
+            consume(TokenType::KEYWORD_NOOBS, "Expected 'NOOBS' option");
+            procPrintNode->options["NOOBS"] = "YES";
+        }
+        if (match(TokenType::KEYWORD_LABEL)) {
+            consume(TokenType::KEYWORD_LABEL, "Expected 'LABEL' option");
+            procPrintNode->options["LABEL"] = "YES";
+        }
+    }
+
+    // Expect RUN; statement
+    consume(TokenType::KEYWORD_RUN, "Expected 'RUN;' to terminate PROC PRINT");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
+
+    return procPrintNode;
+}
+

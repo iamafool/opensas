@@ -39,6 +39,10 @@ Lexer::Lexer(const std::string &in) : input(in) {
     keywords["NOCUM"] = TokenType::KEYWORD_NOCUM;
     keywords["NOPRINT"] = TokenType::KEYWORD_NOPRINT;
     keywords["ORDER"] = TokenType::KEYWORD_ORDER;
+    keywords["PRINT"] = TokenType::KEYWORD_PRINT;
+    keywords["OBS"] = TokenType::KEYWORD_OBS;
+    keywords["NOOBS"] = TokenType::KEYWORD_NOOBS;
+    keywords["LABEL"] = TokenType::KEYWORD_LABEL;
 
 }
 

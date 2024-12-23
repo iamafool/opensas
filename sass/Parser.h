@@ -47,6 +47,7 @@ private:
     std::unique_ptr<ASTNode> parseProcSort();
     std::unique_ptr<ASTNode> parseProcMeans();
     std::unique_ptr<ASTNode> parseProcFreq();
+    std::unique_ptr<ASTNode> parseProcPrint();
 
     // Expression parsing with precedence
     std::unique_ptr<ASTNode> parseExpression(int precedence = 0);

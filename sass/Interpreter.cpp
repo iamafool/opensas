@@ -371,49 +371,11 @@ void Interpreter::executeProc(ProcNode* node) {
     else if (auto procFreq = dynamic_cast<ProcFreqNode*>(node)) {
         executeProcFreq(procFreq);
     }
+    else if (auto procPrint = dynamic_cast<ProcPrintNode*>(node)) {
+        executeProcPrint(procPrint);
+    }
     else {
-        if (node->procName == "print") {
-            logLogger.info("Executing PROC PRINT on dataset '{}'.", node->datasetName);
-            try {
-                auto dataset = env.getOrCreateDataset("", node->datasetName);
-                lstLogger.info("PROC PRINT Results for Dataset '{}':", dataset->name);
-                if (!env.title.empty()) {
-                    lstLogger.info("Title: {}", env.title);
-                }
-
-                // Print column headers
-                std::string header;
-                for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
-                    header += dataset->columnOrder[i];
-                    if (i < dataset->columnOrder.size() - 1) header += "\t";
-                }
-                lstLogger.info("{}", header);
-
-                // Print rows
-                int obs = 1;
-                for (const auto& row : dataset->rows) {
-                    std::string rowStr = std::to_string(obs++) + "\t";
-                    for (size_t i = 0; i < dataset->columnOrder.size(); ++i) {
-                        const std::string& col = dataset->columnOrder[i];
-                        auto it = row.columns.find(col);
-                        if (it != row.columns.end()) {
-                            rowStr += toString(it->second);
-                        }
-                        else {
-                            rowStr += ".";
-                        }
-                        if (i < dataset->columnOrder.size() - 1) rowStr += "\t";
-                    }
-                    lstLogger.info("{}", rowStr);
-                }
-            }
-            catch (const std::runtime_error& e) {
-                logLogger.error("PROC PRINT failed: {}", e.what());
-            }
-        }
-        else {
-            logLogger.error("Unsupported PROC: {}", node->procName);
-        }
+        throw std::runtime_error("Unsupported PROC type.");
     }
 }
 
@@ -1719,3 +1681,111 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
         }
     }
 }
+
+void Interpreter::executeProcPrint(ProcPrintNode* node) {
+    logLogger.info("Executing PROC PRINT");
+
+    // Retrieve the input dataset
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    if (!inputDS) {
+        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC PRINT.");
+    }
+
+    // Determine which variables to print
+    std::vector<std::string> varsToPrint;
+    if (!node->varVariables.empty()) {
+        varsToPrint = node->varVariables;
+    }
+    else {
+        // If VAR statement is not specified, print all variables
+        for (const auto& pair : inputDS->columns) {
+            varsToPrint.push_back(pair.first);
+        }
+    }
+
+    // Handle options
+    int obsLimit = -1; // -1 means no limit
+    bool noObs = false;
+    bool useLabels = false;
+
+    auto it = node->options.find("OBS");
+    if (it != node->options.end()) {
+        obsLimit = std::stoi(it->second);
+    }
+
+    it = node->options.find("NOOBS");
+    if (it != node->options.end()) {
+        noObs = true;
+    }
+
+    it = node->options.find("LABEL");
+    if (it != node->options.end()) {
+        useLabels = true;
+    }
+
+    // Prepare header
+    std::stringstream header;
+    if (!noObs) {
+        header << "OBS\t";
+    }
+    for (size_t i = 0; i < varsToPrint.size(); ++i) {
+        const std::string& var = varsToPrint[i];
+        std::string displayName = var;
+        if (useLabels) {
+            // Assume variables have labels stored somewhere; placeholder for actual label retrieval
+            // For now, use variable names
+            displayName = var; // Replace with label if available
+        }
+        header << displayName;
+        if (i != varsToPrint.size() - 1) {
+            header << "\t";
+        }
+    }
+    header << "\n";
+
+    // Log header
+    logLogger.info("PROC PRINT Results for Dataset '{}':", inputDS->name);
+    logLogger.info(header.str());
+
+    // Iterate over rows and print data
+    int obsCount = 0;
+    for (size_t i = 0; i < inputDS->rows.size(); ++i) {
+        if (obsLimit != -1 && obsCount >= obsLimit) {
+            break;
+        }
+
+        const Row& row = inputDS->rows[i];
+        std::stringstream rowStream;
+        if (!noObs) {
+            rowStream << (i + 1) << "\t";
+        }
+
+        for (size_t j = 0; j < varsToPrint.size(); ++j) {
+            const std::string& var = varsToPrint[j];
+            auto itVar = row.columns.find(var);
+            if (itVar != row.columns.end()) {
+                if (std::holds_alternative<double>(itVar->second)) {
+                    rowStream << std::fixed << std::setprecision(2) << std::get<double>(itVar->second);
+                }
+                else if (std::holds_alternative<std::string>(itVar->second)) {
+                    rowStream << std::get<std::string>(itVar->second);
+                }
+                // Handle other data types as needed
+            }
+            else {
+                rowStream << "NA"; // Handle missing variables
+            }
+
+            if (j != varsToPrint.size() - 1) {
+                rowStream << "\t";
+            }
+        }
+        rowStream << "\n";
+
+        logLogger.info(rowStream.str());
+        obsCount++;
+    }
+
+    logLogger.info("PROC PRINT executed successfully.");
+}
+

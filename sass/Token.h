@@ -54,7 +54,10 @@ namespace sass {
         KEYWORD_NOPRINT,
         KEYWORD_ORDER,
         KEYWORD_FREQ,
-
+        KEYWORD_PRINT,
+        KEYWORD_OBS,
+        KEYWORD_NOOBS,
+        KEYWORD_LABEL,
         EQUAL,
         SEMICOLON,
         LPAREN,

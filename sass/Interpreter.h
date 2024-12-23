@@ -49,6 +49,7 @@ private:
     void executeProcSort(ProcSortNode* node);
     void executeProcMeans(ProcMeansNode* node);
     void executeProcFreq(ProcFreqNode* node);
+    void executeProcPrint(ProcPrintNode* node);
     void executeBlock(BlockNode* node);
     void executeMerge(MergeStatementNode* node);
     void executeBy(ByStatementNode* node);
