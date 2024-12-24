@@ -57,6 +57,15 @@ private:
     void executeDoLoop(DoLoopNode* node);
     void executeEnd(EndNode* node);
 
+    std::unordered_map<std::string, std::string> macroVariables; // Stores macro variables
+    std::unordered_map<std::string, std::unique_ptr<MacroDefinitionNode>> macros; // Stores macro definitions
+
+    void executeMacroVariableAssignment(MacroVariableAssignmentNode* node);
+    void executeMacroDefinition(std::unique_ptr<MacroDefinitionNode> node);
+    void executeMacroCall(MacroCallNode* node);
+
+    std::string resolveMacroVariables(const std::string& input);
+
     double toNumber(const Value &v);
     std::string toString(const Value &v);
 

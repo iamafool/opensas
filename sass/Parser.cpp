@@ -107,6 +107,10 @@ std::unique_ptr<ASTNode> Parser::parseStatement() {
             throw std::runtime_error("Unexpected 'ELSE IF' without preceding 'IF'.");
         case TokenType::KEYWORD_OUTPUT:
             return parseOutput();
+        case TokenType::KEYWORD_MACRO_LET:
+            return parseLetStatement();
+        case TokenType::KEYWORD_MACRO_MACRO:
+            return parseMacroDefinition();
         default:
             // Handle unknown token or throw error
             throw std::runtime_error("Unknown statement starting with token: " + t.text);
@@ -1032,4 +1036,77 @@ std::unique_ptr<SQLStatementNode> Parser::parseSQLStatement() {
         // Unsupported SQL statement
         return nullptr;
     }
+}
+
+std::unique_ptr<ASTNode> Parser::parseLetStatement() {
+    consume(TokenType::KEYWORD_MACRO_LET, "Expected '%let'");
+    std::string varName = consume(TokenType::IDENTIFIER, "Expected macro variable name").text;
+    consume(TokenType::EQUAL, "Expected '=' after variable name");
+    std::string value = consume(TokenType::STRING, "Expected value for macro variable").text;
+    consume(TokenType::SEMICOLON, "Expected ';' after '%let' statement");
+
+    auto node = std::make_unique<MacroVariableAssignmentNode>();
+    node->varName = varName;
+    node->value = value;
+    return node;
+}
+
+std::unique_ptr<ASTNode> Parser::parseMacroDefinition() {
+    consume(TokenType::KEYWORD_MACRO_MACRO, "Expected '%macro'");
+    std::string macroName = consume(TokenType::IDENTIFIER, "Expected macro name").text;
+    consume(TokenType::LPAREN, "Expected '(' after macro name");
+
+    // Parse parameters
+    std::vector<std::string> parameters;
+    if (peek().type != TokenType::RPAREN) { // Handle macros with parameters
+        while (true) {
+            parameters.push_back(consume(TokenType::IDENTIFIER, "Expected parameter name").text);
+            if (peek().type == TokenType::COMMA) {
+                consume(TokenType::COMMA, "Expected ',' between parameters");
+            }
+            else {
+                break;
+            }
+        }
+    }
+    consume(TokenType::RPAREN, "Expected ')' after parameters");
+
+    auto macroNode = std::make_unique<MacroDefinitionNode>();
+    macroNode->macroName = macroName;
+    macroNode->parameters = parameters;
+
+    // Parse macro body
+    while (peek().type != TokenType::KEYWORD_MACRO_MEND && peek().type != TokenType::EOF_TOKEN) {
+        auto stmt = parseStatement();
+        if (stmt) macroNode->body.push_back(std::move(stmt));
+    }
+    consume(TokenType::KEYWORD_MACRO_MEND, "Expected '%mend'");
+    consume(TokenType::SEMICOLON, "Expected ';' after '%mend'");
+
+    return macroNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseMacroCall() {
+    Token macroNameToken = consume(TokenType::IDENTIFIER, "Expected macro name");
+
+    auto node = std::make_unique<MacroCallNode>();
+    node->macroName = macroNameToken.text;
+
+    if (peek().type == TokenType::LPAREN) {
+        consume(TokenType::LPAREN, "Expected '(' after macro name");
+
+        while (peek().type != TokenType::RPAREN) {
+            auto arg = parseExpression();
+            node->arguments.push_back(std::move(arg));
+
+            if (peek().type == TokenType::COMMA) {
+                consume(TokenType::COMMA, "Expected ',' between arguments");
+            }
+        }
+
+        consume(TokenType::RPAREN, "Expected ')' after macro arguments");
+    }
+
+    consume(TokenType::SEMICOLON, "Expected ';' after macro call");
+    return node;
 }

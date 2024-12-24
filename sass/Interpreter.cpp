@@ -24,7 +24,17 @@ void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
 
 // Execute a single AST node
 void Interpreter::execute(ASTNode *node) {
-    if (auto ds = dynamic_cast<DataStepNode*>(node)) {
+    if (auto callNode = dynamic_cast<MacroCallNode*>(node)) {
+        executeMacroCall(callNode);
+    }
+    else if (auto macroNode = dynamic_cast<MacroDefinitionNode*>(node)) {
+        std::unique_ptr<MacroDefinitionNode> uniqueMacroNode{ macroNode };
+        executeMacroDefinition(std::move(uniqueMacroNode));
+    }
+    else if (auto letNode = dynamic_cast<MacroVariableAssignmentNode*>(node)) {
+        executeMacroVariableAssignment(letNode);
+    }
+    else if (auto ds = dynamic_cast<DataStepNode*>(node)) {
         executeDataStep(ds);
     }
     else if (auto opt = dynamic_cast<OptionsNode*>(node)) {
@@ -1965,3 +1975,80 @@ void Interpreter::executeCreateTable(const CreateTableStatementNode* createStmt)
 }
 
 // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
+
+std::string Interpreter::resolveMacroVariables(const std::string& input) {
+    std::string result = input;
+    size_t startPos = 0;
+
+    while ((startPos = result.find('&', startPos)) != std::string::npos) {
+        size_t endPos = startPos + 1;
+        while (endPos < result.size() && (isalnum(result[endPos]) || result[endPos] == '_')) {
+            ++endPos;
+        }
+
+        std::string varName = result.substr(startPos + 1, endPos - startPos - 1);
+
+        auto it = macroVariables.find(varName);
+        if (it != macroVariables.end()) {
+            logLogger.debug("Resolving macro variable '&{}' to '{}'", varName, it->second);
+            result.replace(startPos, endPos - startPos, it->second);
+        }
+        else {
+            throw std::runtime_error("Unresolved macro variable: " + varName);
+        }
+    }
+
+    return result;
+}
+
+
+void Interpreter::executeMacroVariableAssignment(MacroVariableAssignmentNode* node) {
+    macroVariables[node->varName] = resolveMacroVariables(node->value);
+    logLogger.info("Macro variable '{}' set to '{}'", node->varName, macroVariables[node->varName]);
+}
+
+void Interpreter::executeMacroDefinition(std::unique_ptr<MacroDefinitionNode> node) {
+    if (macros.find(node->macroName) != macros.end()) {
+        throw std::runtime_error("Macro '" + node->macroName + "' is already defined.");
+    }
+    macros[node->macroName] = std::move(node);
+    logLogger.info("Macro '{}' defined.", macros[node->macroName]->macroName);
+}
+
+void Interpreter::executeMacroCall(MacroCallNode* node) {
+    auto it = macros.find(node->macroName);
+    if (it == macros.end()) {
+        throw std::runtime_error("Undefined macro: " + node->macroName);
+    }
+
+    MacroDefinitionNode* macro = it->second.get();
+
+    // Map arguments to parameters
+    if (node->arguments.size() != macro->parameters.size()) {
+        throw std::runtime_error("Macro '" + macro->macroName + "' expects " +
+            std::to_string(macro->parameters.size()) +
+            " arguments, but got " + std::to_string(node->arguments.size()));
+    }
+
+    std::unordered_map<std::string, std::string> localVariables;
+    for (size_t i = 0; i < macro->parameters.size(); ++i) {
+        localVariables[macro->parameters[i]] = resolveMacroVariables(
+            dynamic_cast<StringNode*>(node->arguments[i].get())->value);
+    }
+
+    // Temporarily override macro variables
+    auto backup = macroVariables;
+    for (const auto& pair : localVariables) {
+        macroVariables[pair.first] = pair.second;
+    }
+
+    // Execute macro body
+    for (const auto& stmt : macro->body) {
+        execute(stmt.get());
+    }
+
+    // Restore original macro variables
+    macroVariables = backup;
+
+    logLogger.info("Macro '{}' executed successfully.", macro->macroName);
+}

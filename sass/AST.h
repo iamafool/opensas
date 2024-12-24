@@ -288,5 +288,24 @@ public:
 
 // Additional SQL statement nodes (INSERT, UPDATE, DELETE) can be added similarly
 
+class MacroVariableAssignmentNode : public ASTNode {
+public:
+    std::string varName;
+    std::string value;
+};
+
+class MacroDefinitionNode : public ASTNode {
+public:
+    std::string macroName;
+    std::vector<std::string> parameters;
+    std::vector<std::unique_ptr<ASTNode>> body;
+};
+
+class MacroCallNode : public ASTNode {
+public:
+    std::string macroName;
+    std::vector<std::unique_ptr<ASTNode>> arguments;
+};
+
 
 #endif // AST_H

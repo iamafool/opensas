@@ -50,6 +50,9 @@ private:
     std::unique_ptr<ASTNode> parseProcPrint();
     std::unique_ptr<ASTNode> parseProcSQL();
     std::unique_ptr<SQLStatementNode> parseSQLStatement();
+    std::unique_ptr<ASTNode> parseLetStatement();
+    std::unique_ptr<ASTNode> parseMacroDefinition();
+    std::unique_ptr<ASTNode> parseMacroCall();
 
     // Expression parsing with precedence
     std::unique_ptr<ASTNode> parseExpression(int precedence = 0);

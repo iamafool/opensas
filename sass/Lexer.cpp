@@ -148,6 +148,16 @@ Token Lexer::stringLiteral() {
 }
 
 Token Lexer::getNextToken() {
+    // Handle macro statements starting with '%'
+    if (peekChar() == '%') {
+        return macroToken();
+    }
+
+    // Handle macro variables starting with '&'
+    if (peekChar() == '&') {
+        return macroVariable();
+    }
+
     while (pos < input.size()) {
         char current = input[pos];
 
@@ -315,4 +325,30 @@ Token Lexer::getNextToken() {
 
     // Return EOF token if end of input is reached
     return Token{ TokenType::EOF_TOKEN, "", line, col };
+}
+
+Token Lexer::macroToken() {
+    getChar(); // Consume '%'
+    std::string value;
+    while (std::isalnum(peekChar())) {
+        value += getChar();
+    }
+
+    if (value == "let") return Token{ TokenType::KEYWORD_MACRO_LET, "%let", line, col };
+    if (value == "macro") return Token{ TokenType::KEYWORD_MACRO_MACRO, "%macro", line, col };
+    if (value == "mend") return Token{ TokenType::KEYWORD_MACRO_MEND, "%mend", line, col };
+    if (value == "do") return Token{ TokenType::KEYWORD_MACRO_DO, "%do", line, col };
+    if (value == "if") return Token{ TokenType::KEYWORD_MACRO_IF, "%if", line, col };
+    if (value == "then") return Token{ TokenType::KEYWORD_MACRO_THEN, "%then", line, col };
+    if (value == "else") return Token{ TokenType::KEYWORD_MACRO_ELSE, "%else", line, col };
+    throw std::runtime_error("Unknown macro keyword: %" + value);
+}
+
+Token Lexer::macroVariable() {
+    getChar(); // Consume '&'
+    std::string value;
+    while (std::isalnum(peekChar()) || peekChar() == '_') {
+        value += getChar();
+    }
+    return Token{ TokenType::MACRO_VAR, "&" + value, line, col };
 }

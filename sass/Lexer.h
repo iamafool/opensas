@@ -23,6 +23,8 @@ private:
     Token identifierOrKeyword();
     Token number();
     Token stringLiteral();
+    Token macroToken(); // For %macro, %let, etc.
+    Token macroVariable(); // For &varname or &&varname
     std::unordered_map<std::string, TokenType> keywords;
 };
 

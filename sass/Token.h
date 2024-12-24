@@ -77,6 +77,14 @@ namespace sass {
         KEYWORD_OUTER,
         KEYWORD_JOIN,
         KEYWORD_ON,
+        KEYWORD_MACRO_LET,        // %let
+        KEYWORD_MACRO_MACRO,      // %macro
+        KEYWORD_MACRO_MEND,       // %mend
+        KEYWORD_MACRO_DO,         // %do
+        KEYWORD_MACRO_IF,         // %if
+        KEYWORD_MACRO_THEN,       // %then
+        KEYWORD_MACRO_ELSE,       // %else
+        MACRO_VAR,          // &varname or &&varname
         EQUAL,
         SEMICOLON,
         LPAREN,
