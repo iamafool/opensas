@@ -10,80 +10,86 @@
 #include <string>
 #include <stack>
 
-class Interpreter {
-public:
-    Interpreter(DataEnvironment &env, spdlog::logger &logLogger, spdlog::logger &lstLogger)
-        : env(env), logLogger(logLogger), lstLogger(lstLogger) {}
+namespace sass {
+    class Interpreter {
+    public:
+        Interpreter(DataEnvironment& env, spdlog::logger& logLogger, spdlog::logger& lstLogger)
+            : env(env), logLogger(logLogger), lstLogger(lstLogger) {}
 
-    void executeProgram(const std::unique_ptr<ProgramNode> &program);
-    spdlog::logger &logLogger;
+        void executeProgram(const std::unique_ptr<ProgramNode>& program);
+        spdlog::logger& logLogger;
+        void execute(ASTNode* node);
 
-private:
-    DataEnvironment &env;
-    spdlog::logger &lstLogger;
-    // Add a member variable to hold arrays
-    std::unordered_map<std::string, std::vector<std::string>> arrays;
-    std::vector<std::string> retainVars;
+        void handleReplInput(const std::string& input);
 
-    // Current BY variables and their order
-    std::vector<std::string> byVariables;
+    private:
+        DataEnvironment& env;
+        spdlog::logger& lstLogger;
+        // Add a member variable to hold arrays
+        std::unordered_map<std::string, std::vector<std::string>> arrays;
+        std::vector<std::string> retainVars;
 
-    // Stack to manage loop contexts
-    std::stack<std::pair<DoLoopNode*, size_t>> loopStack;
+        // Current BY variables and their order
+        std::vector<std::string> byVariables;
 
-    void execute(ASTNode *node);
-    void executeDataStep(DataStepNode *node);
-    void executeAssignment(AssignmentNode *node);
-    void executeIfThen(IfThenNode *node);
-    void executeIfElse(IfElseIfNode* node); // Updated method
-    void executeOutput(OutputNode *node);
-    void executeOptions(OptionsNode *node);
-    void executeLibname(LibnameNode *node);
-    void executeTitle(TitleNode *node);
-    void executeProc(ProcNode* node);
-    void executeDrop(DropNode* node);
-    void executeKeep(KeepNode* node);
-    void executeRetain(RetainNode* node);
-    void executeArray(ArrayNode* node);
-    void executeDo(DoNode* node);
-    void executeProcSort(ProcSortNode* node);
-    void executeProcMeans(ProcMeansNode* node);
-    void executeProcFreq(ProcFreqNode* node);
-    void executeProcPrint(ProcPrintNode* node);
-    void executeProcSQL(ProcSQLNode* node);
-    void executeBlock(BlockNode* node);
-    void executeMerge(MergeStatementNode* node);
-    void executeBy(ByStatementNode* node);
-    void executeDoLoop(DoLoopNode* node);
-    void executeEnd(EndNode* node);
+        // Stack to manage loop contexts
+        std::stack<std::pair<DoLoopNode*, size_t>> loopStack;
 
-    std::unordered_map<std::string, std::string> macroVariables; // Stores macro variables
-    std::unordered_map<std::string, std::unique_ptr<MacroDefinitionNode>> macros; // Stores macro definitions
+        void executeDataStep(DataStepNode* node);
+        void executeAssignment(AssignmentNode* node);
+        void executeIfThen(IfThenNode* node);
+        void executeIfElse(IfElseIfNode* node); // Updated method
+        void executeOutput(OutputNode* node);
+        void executeOptions(OptionsNode* node);
+        void executeLibname(LibnameNode* node);
+        void executeTitle(TitleNode* node);
+        void executeProc(ProcNode* node);
+        void executeDrop(DropNode* node);
+        void executeKeep(KeepNode* node);
+        void executeRetain(RetainNode* node);
+        void executeArray(ArrayNode* node);
+        void executeDo(DoNode* node);
+        void executeProcSort(ProcSortNode* node);
+        void executeProcMeans(ProcMeansNode* node);
+        void executeProcFreq(ProcFreqNode* node);
+        void executeProcPrint(ProcPrintNode* node);
+        void executeProcSQL(ProcSQLNode* node);
+        void executeBlock(BlockNode* node);
+        void executeMerge(MergeStatementNode* node);
+        void executeBy(ByStatementNode* node);
+        void executeDoLoop(DoLoopNode* node);
+        void executeEnd(EndNode* node);
 
-    void executeMacroVariableAssignment(MacroVariableAssignmentNode* node);
-    void executeMacroDefinition(std::unique_ptr<MacroDefinitionNode> node);
-    void executeMacroCall(MacroCallNode* node);
+        std::unordered_map<std::string, std::string> macroVariables; // Stores macro variables
+        std::unordered_map<std::string, std::unique_ptr<MacroDefinitionNode>> macros; // Stores macro definitions
 
-    std::string resolveMacroVariables(const std::string& input);
+        void executeMacroVariableAssignment(MacroVariableAssignmentNode* node);
+        void executeMacroDefinition(std::unique_ptr<MacroDefinitionNode> node);
+        void executeMacroCall(MacroCallNode* node);
 
-    double toNumber(const Value &v);
-    std::string toString(const Value &v);
+        std::string resolveMacroVariables(const std::string& input);
 
-    Value getVariable(const std::string& varName) const;
+        void reset(); // reset interpreter state
 
-    void setVariable(const std::string& varName, const Value& val);
+        double toNumber(const Value& v);
+        std::string toString(const Value& v);
 
-    Value evaluate(ASTNode *node);
-    Value evaluateFunctionCall(FunctionCallNode* node);
+        Value getVariable(const std::string& varName) const;
 
-    // Helper methods for array operations
-    Value getArrayElement(const std::string& arrayName, int index);
-    void setArrayElement(const std::string& arrayName, int index, const Value& value);
+        void setVariable(const std::string& varName, const Value& val);
 
-    // SQL execution helpers
-    Dataset* executeSelect(const SelectStatementNode* selectStmt);
-    void executeCreateTable(const CreateTableStatementNode* createStmt);
-    // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
-};
+        Value evaluate(ASTNode* node);
+        Value evaluateFunctionCall(FunctionCallNode* node);
 
+        // Helper methods for array operations
+        Value getArrayElement(const std::string& arrayName, int index);
+        void setArrayElement(const std::string& arrayName, int index, const Value& value);
+
+        // SQL execution helpers
+        Dataset* executeSelect(const SelectStatementNode* selectStmt);
+        void executeCreateTable(const CreateTableStatementNode* createStmt);
+        // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
+    };
+
+}
 #endif // INTERPRETER_H

@@ -115,7 +115,6 @@ namespace sass {
         UNKNOWN
     };
 
-}
 
 using sass::TokenType;
 
@@ -126,4 +125,5 @@ struct Token {
     int col;
 };
 
+}
 #endif // TOKEN_H

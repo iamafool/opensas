@@ -3,12 +3,15 @@
 #include <sstream>
 #include <iostream>
 
+namespace sass {
 Parser::Parser(const std::vector<Token> &t) : tokens(t) {}
 
 Token Parser::peek(int offset) const {
     if (pos + offset < tokens.size()) {
         return tokens[pos + offset];
     }
+
+    // Return an EOF token if out of range
     Token eofToken;
     eofToken.type = TokenType::EOF_TOKEN;
     return eofToken;
@@ -45,8 +48,8 @@ std::unique_ptr<ProgramNode> Parser::parseProgram() {
     while (peek().type != TokenType::EOF_TOKEN) {
         try {
             auto stmt = parseStatement();
-            if (stmt) {
-                program->statements.push_back(std::move(stmt));
+            if (stmt.status == ParseStatus::PARSE_SUCCESS) {
+                program->statements.push_back(std::move(stmt.node));
             }
         }
         catch (const std::runtime_error& e) {
@@ -65,94 +68,139 @@ std::unique_ptr<ProgramNode> Parser::parseProgram() {
     return program;
 }
 
-std::unique_ptr<ASTNode> Parser::parseStatement() {
-    try {
-        Token t = peek();
-        switch (t.type) {
-        case TokenType::KEYWORD_DATA:
-            return parseDataStep();
-        case TokenType::KEYWORD_OPTIONS:
-            return parseOptions();
-        case TokenType::KEYWORD_LIBNAME:
-            return parseLibname();
-        case TokenType::KEYWORD_TITLE:
-            return parseTitle();
-        case TokenType::KEYWORD_PROC:
-            return parseProc();
-        case TokenType::KEYWORD_DROP:
-            return parseDrop();
-        case TokenType::KEYWORD_KEEP:
-            return parseKeep();
-        case TokenType::KEYWORD_RETAIN:
-            return parseRetain();
-        case TokenType::KEYWORD_ARRAY:
-            return parseArray();
-        case TokenType::KEYWORD_MERGE:
-            return parseMerge(); // Handle MERGE statements
-        case TokenType::KEYWORD_BY:
-            return parseBy(); // Handle BY statements
-        case TokenType::KEYWORD_DO:
-            return parseDoLoop(); // Handle DO loops
-        case TokenType::KEYWORD_DOLOOP:
-            return parseDo();
-        case TokenType::KEYWORD_ENDDO:
-            return parseEndDo();
-        case TokenType::IDENTIFIER:
-            return parseAssignment();
-        case TokenType::KEYWORD_IF:
-            return parseIfElseIf(); // Updated to handle IF-ELSE IF
-        case TokenType::KEYWORD_ELSE:
-            throw std::runtime_error("Unexpected 'ELSE' without preceding 'IF'.");
-        case TokenType::KEYWORD_ELSE_IF:
-            throw std::runtime_error("Unexpected 'ELSE IF' without preceding 'IF'.");
-        case TokenType::KEYWORD_OUTPUT:
-            return parseOutput();
-        case TokenType::KEYWORD_MACRO_LET:
-            return parseLetStatement();
-        case TokenType::KEYWORD_MACRO_MACRO:
-            return parseMacroDefinition();
-        default:
-            // Handle unknown token or throw error
-            throw std::runtime_error("Unknown statement starting with token: " + t.text);
-        }
-    }
-    catch (const std::runtime_error& e) {
-        // Log the error and attempt to recover by skipping tokens until next semicolon
-        // logLogger->error("Parser error: {}", e.what());
+ParseResult Parser::parseStatement() {
+	Token t = peek();
+	std::unique_ptr<ASTNode> astNode = nullptr;
+	try {
+		switch (t.type) {
+		case TokenType::KEYWORD_DATA:
+			astNode = parseDataStep(); break;
+		case TokenType::KEYWORD_OPTIONS:
+			astNode = parseOptions(); break;
+		case TokenType::KEYWORD_LIBNAME:
+			astNode = parseLibname(); break;
+		case TokenType::KEYWORD_TITLE:
+			astNode = parseTitle(); break;
+		case TokenType::KEYWORD_PROC:
+			astNode = parseProc(); break;
+		case TokenType::KEYWORD_DROP:
+			astNode = parseDrop(); break;
+		case TokenType::KEYWORD_KEEP:
+			astNode = parseKeep(); break;
+		case TokenType::KEYWORD_RETAIN:
+			astNode = parseRetain(); break;
+		case TokenType::KEYWORD_ARRAY:
+			astNode = parseArray(); break;
+		case TokenType::KEYWORD_MERGE:
+			astNode = parseMerge(); break; // Handle MERGE statements
+		case TokenType::KEYWORD_BY:
+			astNode = parseBy(); break; // Handle BY statements
+		case TokenType::KEYWORD_DO:
+			astNode = parseDoLoop(); break; // Handle DO loops
+		case TokenType::KEYWORD_DOLOOP:
+			astNode = parseDo(); break;
+		case TokenType::KEYWORD_ENDDO:
+			astNode = parseEndDo(); break;
+		case TokenType::IDENTIFIER:
+			astNode = parseAssignment(); break;
+		case TokenType::KEYWORD_IF:
+			astNode = parseIfElseIf(); break; // Updated to handle IF-ELSE IF
+		case TokenType::KEYWORD_ELSE:
+			throw std::runtime_error("Unexpected 'ELSE' without preceding 'IF'.");
+		case TokenType::KEYWORD_ELSE_IF:
+			throw std::runtime_error("Unexpected 'ELSE IF' without preceding 'IF'.");
+		case TokenType::KEYWORD_OUTPUT:
+			astNode = parseOutput(); break;
+		case TokenType::KEYWORD_MACRO_LET:
+			astNode = parseLetStatement(); break;
+		case TokenType::KEYWORD_MACRO_MACRO:
+			astNode = parseMacroDefinition(); break;
+		case TokenType::EOF_TOKEN: {
+			// No tokens at all -> incomplete or just end?
+			// If the user typed nothing, we might say incomplete or just success with no statement.
+			return incompleteResult();
+		}
+		default:
+			// Something else we don't recognize -> error
+			return { ParseStatus::PARSE_ERROR, nullptr, "Unknown statement" };
+		}
+	}
+	catch (const std::runtime_error& e) {
+		// If an exception was thrown, treat it as an error
+		return { ParseStatus::PARSE_ERROR, nullptr, e.what() };
+	}
 
-        while (peek().type != TokenType::SEMICOLON && peek().type != TokenType::EOF_TOKEN) {
-            advance();
-        }
-
-        if (peek().type == TokenType::SEMICOLON) {
-            advance(); // Skip semicolon
-        }
-
-        return nullptr; // Return nullptr to indicate skipped statement
-    }
+	if (astNode) {
+		// Full success
+		return { ParseStatus::PARSE_SUCCESS, std::move(astNode), "" };
+	}
+	else {
+		// Means we detected incomplete
+		return incompleteResult();
+	}
 }
 
 std::unique_ptr<ASTNode> Parser::parseDataStep() {
-    // data <dataset>; set <source>; ... run;
-    auto node = std::make_unique<DataStepNode>();
+    auto dataNode = std::make_unique<DataStepNode>();
+
+    // consume 'data'
     consume(TokenType::KEYWORD_DATA, "Expected 'data'");
-    node->outputDataSet = consume(TokenType::IDENTIFIER, "Expected dataset name").text;
-    consume(TokenType::SEMICOLON, "Expected ';' after dataset name");
 
-    consume(TokenType::KEYWORD_SET, "Expected 'set'");
-    node->inputDataSet = consume(TokenType::IDENTIFIER, "Expected input dataset name").text;
-    consume(TokenType::SEMICOLON, "Expected ';' after input dataset name");
-
-    // Parse statements until 'run;'
-    while (peek().type != TokenType::KEYWORD_RUN && peek().type != TokenType::EOF_TOKEN) {
-        auto stmt = parseStatement();
-        if (stmt) node->statements.push_back(std::move(stmt));
-        else break; // Or handle differently
+    // We expect an identifier for dataset name
+    if (peek().type == TokenType::EOF_TOKEN) {
+        // Not enough tokens -> incomplete
+        return nullptr;
     }
-    consume(TokenType::KEYWORD_RUN, "Expected 'run'");
-    consume(TokenType::SEMICOLON, "Expected ';' after 'run'");
 
-    return node;
+    Token dsNameTok = advance();
+    if (dsNameTok.type != TokenType::IDENTIFIER) {
+        throw std::runtime_error("Expected dataset name after 'data'");
+    }
+
+    // Optional semicolon
+    // In real SAS, you do typically: data someDs; ...
+    if (peek().type == TokenType::SEMICOLON) {
+        advance(); // consume the semicolon
+    }
+    else {
+        // If missing semicolon, let's treat it as incomplete 
+        // (or you can treat it as an error, depending on how strict you want to be)
+        return nullptr;
+    }
+
+    bool foundRun = false;
+    while (!foundRun) {
+        Token tok = peek();
+        if (tok.type == TokenType::EOF_TOKEN) {
+            // We ran out of tokens -> incomplete
+            return nullptr;
+        }
+        else if (tok.type == TokenType::KEYWORD_RUN) {
+            // consume 'run'
+            advance();
+            // next token should be semicolon
+            if (peek().type == TokenType::SEMICOLON) {
+                advance(); // consume semicolon
+                foundRun = true;
+            }
+            else {
+                // Missing semicolon after run -> incomplete or error
+                return nullptr;
+            }
+        }
+        else {
+            auto parseResult = parseStatement();
+            if (parseResult.status == ParseStatus::PARSE_SUCCESS)
+                dataNode->statements.push_back(std::move(parseResult.node));
+        }
+    }
+
+    // If we get here, we found 'run;'
+    dataNode->outputDataSet = dsNameTok.text;
+    // In real code, you'd also store any statements parsed inside the data step.
+    // For now, we just fill in the dataset name.
+
+    return dataNode;
 }
 
 std::unique_ptr<ASTNode> Parser::parseOptions() {
@@ -239,7 +287,7 @@ std::unique_ptr<ASTNode> Parser::parseIfThen() {
 
     // Parse a single statement after then (for simplicity)
     auto stmt = parseStatement();
-    if (stmt) node->thenStatements.push_back(std::move(stmt));
+    if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
 
     return node;
 }
@@ -253,19 +301,25 @@ std::unique_ptr<ASTNode> Parser::parseOutput() {
 }
 
 std::unique_ptr<ASTNode> Parser::parseExpression(int precedence) {
+    // First parse the "primary" expression
     auto left = parsePrimary();
 
     while (true) {
         Token t = peek();
+        if (t.type == TokenType::EOF_TOKEN) break; // no more tokens
+
+        // e.g., if t.text == "+" or "*", check precedence
         std::string op = t.text;
         int currentPrecedence = getPrecedence(op);
+
+        // If this operator has lower precedence than 'precedence', we stop
         if (currentPrecedence < precedence) break;
+
+        // Otherwise, consume the operator
+        advance(); // eat that operator token
 
         // Handle right-associative operators if any (e.g., exponentiation)
         bool rightAssociative = false; // Adjust as needed
-
-        // Consume the operator
-        advance();
 
         // Determine next precedence
         int nextPrecedence = rightAssociative ? currentPrecedence : currentPrecedence + 1;
@@ -326,13 +380,17 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 }
 
 int Parser::getPrecedence(const std::string& op) const {
+    if (op == "=") return -1;
+
     if (op == "or") return 1;
     if (op == "and") return 2;
     if (op == "==" || op == "!=" || op == ">" || op == "<" || op == ">=" || op == "<=") return 3;
     if (op == "+" || op == "-") return 4;
     if (op == "*" || op == "/") return 5;
     if (op == "**") return 6;
-    return 0;
+
+    // If not recognized, return -1 so we treat it as no operator
+    return -1;
 }
 
 std::unique_ptr<ASTNode> Parser::parseProc() {
@@ -444,7 +502,7 @@ std::unique_ptr<ASTNode> Parser::parseDo() {
     // Parse nested statements until 'enddo;'
     while (peek().type != TokenType::KEYWORD_ENDDO && peek().type != TokenType::EOF_TOKEN) {
         auto stmt = parseStatement();
-        if (stmt) node->statements.push_back(std::move(stmt));
+        if (stmt.status == ParseStatus::PARSE_SUCCESS) node->statements.push_back(std::move(stmt.node));
     }
 
     consume(TokenType::KEYWORD_ENDDO, "Expected 'enddo'");
@@ -468,13 +526,13 @@ std::unique_ptr<ASTNode> Parser::parseIfElse() {
     // Parse 'then' statements
     // For simplicity, assume a single statement; can be extended to handle blocks
     auto stmt = parseStatement();
-    if (stmt) node->thenStatements.push_back(std::move(stmt));
+    if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
 
     // Check for 'else'
     if (peek().type == TokenType::KEYWORD_ELSE) {
         consume(TokenType::KEYWORD_ELSE, "Expected 'else'");
         auto elseStmt = parseStatement();
-        if (elseStmt) node->elseStatements.push_back(std::move(elseStmt));
+        if (elseStmt.status == ParseStatus::PARSE_SUCCESS) node->elseStatements.push_back(std::move(elseStmt.node));
     }
 
     return node;
@@ -491,7 +549,7 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
     // Parse 'then' statements
     // For simplicity, assume a single statement; can be extended to handle blocks
     auto stmt = parseStatement();
-    if (stmt) node->thenStatements.push_back(std::move(stmt));
+    if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
 
     // Handle multiple 'ELSE IF' branches
     while (peek().type == TokenType::KEYWORD_ELSE_IF) {
@@ -501,7 +559,7 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
 
         std::vector<std::unique_ptr<ASTNode>> elseIfStmts;
         auto elseIfStmt = parseStatement();
-        if (elseIfStmt) elseIfStmts.push_back(std::move(elseIfStmt));
+        if (elseIfStmt.status == ParseStatus::PARSE_SUCCESS) elseIfStmts.push_back(std::move(elseIfStmt.node));
 
         node->elseIfBranches.emplace_back(std::move(elseIfCondition), std::move(elseIfStmts));
     }
@@ -510,7 +568,7 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
     if (peek().type == TokenType::KEYWORD_ELSE) {
         consume(TokenType::KEYWORD_ELSE, "Expected 'else'");
         auto elseStmt = parseStatement();
-        if (elseStmt) node->elseStatements.push_back(std::move(elseStmt));
+        if (elseStmt.status == ParseStatus::PARSE_SUCCESS) node->elseStatements.push_back(std::move(elseStmt.node));
     }
 
     return node;
@@ -521,7 +579,7 @@ std::unique_ptr<ASTNode> Parser::parseBlock() {
     std::vector<std::unique_ptr<ASTNode>> statements;
     while (peek().type != TokenType::KEYWORD_ENDDO && peek().type != TokenType::EOF_TOKEN) {
         auto stmt = parseStatement();
-        if (stmt) statements.push_back(std::move(stmt));
+        if (stmt.status == ParseStatus::PARSE_SUCCESS) statements.push_back(std::move(stmt.node));
     }
     consume(TokenType::KEYWORD_ENDDO, "Expected 'enddo' to close the block");
     consume(TokenType::SEMICOLON, "Expected ';' after 'enddo'");
@@ -619,7 +677,9 @@ std::unique_ptr<ASTNode> Parser::parseDoLoop() {
     doLoopNode->body = std::make_unique<BlockNode>();
 
     while (!match(TokenType::KEYWORD_END) && pos < tokens.size()) {
-        doLoopNode->body->statements.push_back(parseStatement());
+        auto parseResult = parseStatement();
+        if (parseResult.status == ParseStatus::PARSE_SUCCESS)
+            doLoopNode->body->statements.push_back(std::move(parseResult.node));
     }
 
     consume(TokenType::KEYWORD_END, "Expected 'END' to close 'DO' loop");
@@ -840,32 +900,21 @@ std::unique_ptr<ASTNode> Parser::parseProcFreq() {
 
 
 std::unique_ptr<ASTNode> Parser::parseProcPrint() {
+    bool foundRun = false;
     auto procPrintNode = std::make_unique<ProcPrintNode>();
     consume(TokenType::KEYWORD_PRINT, "Expected 'PRINT' keyword after 'PROC'");
 
-    // Parse DATA= option
-    if (match(TokenType::KEYWORD_DATA)) {
-        consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC PRINT");
-        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
-        procPrintNode->inputDataSet = dataToken.text;
-    }
-    else {
-        throw std::runtime_error("PROC PRINT requires a DATA= option");
-    }
-
-    // Parse VAR statement (optional)
-    if (match(TokenType::KEYWORD_VAR)) {
-        consume(TokenType::KEYWORD_VAR, "Expected 'VAR' keyword in PROC PRINT");
-        while (peek().type == TokenType::IDENTIFIER) {
-            Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in VAR statement");
-            procPrintNode->varVariables.push_back(varToken.text);
-        }
-    }
-
     // Parse options (optional)
-    while (match(TokenType::KEYWORD_OBS) ||
+    while (match(TokenType::KEYWORD_DATA) ||
+        match(TokenType::KEYWORD_OBS) ||
         match(TokenType::KEYWORD_NOOBS) ||
         match(TokenType::KEYWORD_LABEL)) {
+        // Parse DATA= option
+        if (match(TokenType::KEYWORD_DATA)) {
+            consume(TokenType::EQUAL, "Expected '=' after 'DATA'");
+            Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
+            procPrintNode->inputDataSet = dataToken.text;
+        }
         if (match(TokenType::KEYWORD_OBS)) {
             consume(TokenType::KEYWORD_OBS, "Expected 'OBS=' option");
             Token eqToken = consume(TokenType::EQUAL, "Expected '=' after 'OBS'");
@@ -882,11 +931,26 @@ std::unique_ptr<ASTNode> Parser::parseProcPrint() {
         }
     }
 
-    // Expect RUN; statement
-    consume(TokenType::KEYWORD_RUN, "Expected 'RUN;' to terminate PROC PRINT");
-    consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
+    consume(TokenType::SEMICOLON, "Expected ';' to end proc print");
 
-    return procPrintNode;
+    // Parse VAR statement (optional)
+    if (match(TokenType::KEYWORD_VAR)) {
+        consume(TokenType::KEYWORD_VAR, "Expected 'VAR' keyword in PROC PRINT");
+        while (peek().type == TokenType::IDENTIFIER) {
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in VAR statement");
+            procPrintNode->varVariables.push_back(varToken.text);
+        }
+    }
+
+    // Expect RUN; statement
+    if (match(TokenType::KEYWORD_RUN)) {
+        foundRun = true;
+        consume(TokenType::SEMICOLON, "Expected ';' after 'RUN'");
+    }
+
+
+    if (foundRun) return procPrintNode;
+    return nullptr;
 }
 
 std::unique_ptr<ASTNode> Parser::parseProcSQL() {
@@ -1078,7 +1142,7 @@ std::unique_ptr<ASTNode> Parser::parseMacroDefinition() {
     // Parse macro body
     while (peek().type != TokenType::KEYWORD_MACRO_MEND && peek().type != TokenType::EOF_TOKEN) {
         auto stmt = parseStatement();
-        if (stmt) macroNode->body.push_back(std::move(stmt));
+        if (stmt.status == ParseStatus::PARSE_SUCCESS) macroNode->body.push_back(std::move(stmt.node));
     }
     consume(TokenType::KEYWORD_MACRO_MEND, "Expected '%mend'");
     consume(TokenType::SEMICOLON, "Expected ';' after '%mend'");
@@ -1109,4 +1173,6 @@ std::unique_ptr<ASTNode> Parser::parseMacroCall() {
 
     consume(TokenType::SEMICOLON, "Expected ';' after macro call");
     return node;
+}
+
 }

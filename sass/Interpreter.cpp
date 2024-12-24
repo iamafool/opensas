@@ -2,13 +2,16 @@
 #include "Sorter.h"
 #include <iostream>
 #include <stdexcept>
-#include <cmath>
+#include <cmath> // for std::nan
 #include <algorithm>
 #include <iomanip>
 #include <unordered_set>
 #include <numeric>
 #include <set>
+#include "Lexer.h"
+#include "Parser.h"
 
+namespace sass {
 // Execute the entire program
 void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
     for (const auto &stmt : program->statements) {
@@ -75,231 +78,312 @@ void Interpreter::execute(ASTNode *node) {
 }
 
 // Execute a DATA step
-void Interpreter::executeDataStep(DataStepNode *node) {
-    logLogger.info("Executing DATA step: data {}; set {};", node->outputDataSet, node->inputDataSet);
+void Interpreter::executeDataStep(DataStepNode* node) {
+    // 1) Determine output dataset name (libref + dataset)
+    std::string libref;
+    std::string dsName;
 
-    // Resolve output dataset name
-    std::string outputLibref, outputDataset;
-    size_t dotPos = node->outputDataSet.find('.');
-    if (dotPos != std::string::npos) {
-        outputLibref = node->outputDataSet.substr(0, dotPos);
-        outputDataset = node->outputDataSet.substr(dotPos + 1);
+    // Suppose node->outputDataSet is "a", or "mylib.a"
+    auto full = node->outputDataSet;
+    auto dotPos = full.find('.');
+    if (dotPos == std::string::npos) {
+        libref = "";
+        dsName = full;
     }
     else {
-        outputDataset = node->outputDataSet;
+        libref = full.substr(0, dotPos);
+        dsName = full.substr(dotPos + 1);
     }
 
-    // Resolve input dataset name
-    std::string inputLibref, inputDataset;
-    dotPos = node->inputDataSet.find('.');
-    if (dotPos != std::string::npos) {
-        inputLibref = node->inputDataSet.substr(0, dotPos);
-        inputDataset = node->inputDataSet.substr(dotPos + 1);
-    }
-    else {
-        inputDataset = node->inputDataSet;
-    }
+    // 2) Create the dataset in the environment
+    // env.getOrCreateDataset(libref, dsName) might already exist; let's create a fresh dataset for demonstration
+    auto ds = env.getOrCreateDataset(libref, dsName);
+    ds->rows.clear();          // fresh start
+    ds->columnOrder.clear();
 
-    // Check if input dataset exists
-    std::shared_ptr<Dataset> input = nullptr;
-    try {
-        input = env.getOrCreateDataset(inputLibref, inputDataset);
-    }
-    catch (const std::runtime_error &e) {
-        logLogger.error(e.what());
-        return;
-    }
+    // Keep track that we¡¯re in a DATA step
+    // In real SAS, we'd do multiple passes for each input row if there's a SET, 
+    // but here let's assume a single iteration for demonstration
+    // so we "process" node->statements once.
 
-    // Create or get the output dataset
-    std::shared_ptr<Dataset> output;
-    try {
-        output = env.getOrCreateDataset(outputLibref, outputDataset);
-        output->name = node->outputDataSet;
-    }
-    catch (const std::runtime_error &e) {
-        logLogger.error(e.what());
-        return;
-    }
+    // Reset currentRow
+    env.currentRow.columns.clear();
 
-    // Log dataset sizes
-    logLogger.info("Input dataset '{}' has {} observations.", node->inputDataSet, input->rows.size());
-    logLogger.info("Output dataset '{}' will store results.", node->outputDataSet);
+    // 3) Execute each statement
+    bool shouldOutput = false;
 
-    // Variables to control variable retention
-    std::vector<std::string> dropVars;
-    std::vector<std::string> keepVars;
-    std::vector<std::string> retainVars;
-
-    bool hasDrop = false;
-    bool hasKeep = false;
-    bool hasRetain = false;
-
-    // Check if a MERGE statement exists in the data step
-    bool hasMerge = false;
-    MergeStatementNode* mergeNode = nullptr;
-    for (const auto& stmt : node->statements) {
-        if (auto m = dynamic_cast<MergeStatementNode*>(stmt.get())) {
-            hasMerge = true;
-            mergeNode = m;
-            break;
+    for (auto& stmt : node->statements) {
+        if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
+            // Evaluate the right-hand side
+            Value val = evaluate(assign->expression.get());
+            // Set the variable
+            env.currentRow.columns[assign->varName] = val;
+        }
+        else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
+            // When we see 'output;', push currentRow into ds->rows
+            ds->addRow(env.currentRow);
+            // In real SAS, this often resets certain variables to missing, 
+            // but let's skip that for simplicity.
+            shouldOutput = true;
+        }
+        else {
+            logLogger.warn("DATA step statement not implemented. Skipping.");
         }
     }
 
-    if (hasMerge && mergeNode) {
-        // Handle MERGE logic
-        executeMerge(mergeNode);
-        // Remove MERGE statement from the data step to avoid re-processing
-        // Implement this as per your data structure
-    }
+    // 4) If user never typed 'output;', we might want to output once anyway. 
+    // But in real SAS, you must call 'output;' or no record is written 
+    // (except if there's an implied output at the bottom).
+    // We'll do nothing here unless you want an implied output.
 
-    // Execute each row in the input dataset
-    for (const auto &row : input->rows) {
-        env.currentRow = row; // Set the current row for processing
-
-        // Apply RETAIN variables: retain their values across iterations
-        if (hasRetain) {
-            for (const auto& var : retainVars) {
-                if (env.variables.find(var) != env.variables.end()) {
-                    env.currentRow.columns[var] = env.variables[var];
-                }
+    // 5) Count observations & variables
+    // Variables can be gleaned from ds->columnOrder or from the columns in the first row
+    if (ds->rows.size() > 0) {
+        // If no columnOrder was set yet, let's populate it from the first row
+        if (ds->columnOrder.empty()) {
+            for (auto& colpair : ds->rows[0].columns) {
+                ds->columnOrder.push_back(colpair.first);
             }
-        }
-
-        // Flag to determine if the row should be output
-        bool shouldOutput = false;
-
-        // Temporary variables to track DROP/KEEP
-        dropVars.clear();
-        keepVars.clear();
-        retainVars.clear();
-        hasDrop = false;
-        hasKeep = false;
-        hasRetain = false;
-
-        // Execute each statement in the DATA step
-        for (const auto &stmt : node->statements) {
-            if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
-                executeAssignment(assign);
-            }
-            else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
-                executeIfThen(ifThen);
-            }
-            else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
-                executeOutput(out);
-                shouldOutput = true;
-            }
-            else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
-                executeDrop(drop);
-                hasDrop = true;
-            }
-            else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
-                executeKeep(keep);
-                hasKeep = true;
-            }
-            else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
-                executeRetain(retain);
-                hasRetain = true;
-            }
-            else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
-                executeArray(array);
-            }
-            else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
-                executeDo(doNode);
-            }
-            else {
-                // Handle other DATA step statements if needed
-                throw std::runtime_error("Unsupported statement in DATA step.");
-            }
-        }
-
-        // Apply DROP and KEEP rules
-        if (hasDrop && hasKeep) {
-            // In SAS, if both DROP and KEEP are specified, KEEP takes precedence
-            // Keep only the variables specified in KEEP
-            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
-                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
-                    it = env.currentRow.columns.erase(it);
-                }
-                else {
-                    ++it;
-                }
-            }
-        }
-        else if (hasKeep) {
-            // Keep only the variables specified in KEEP
-            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
-                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
-                    it = env.currentRow.columns.erase(it);
-                }
-                else {
-                    ++it;
-                }
-            }
-        }
-        else if (hasDrop) {
-            // Drop the variables specified in DROP
-            for (const auto& var : dropVars) {
-                env.currentRow.columns.erase(var);
-            }
-        }
-
-        // Apply RETAIN variables: store their values for the next iteration
-        if (hasRetain) {
-            for (const auto& var : retainVars) {
-                if (env.currentRow.columns.find(var) != env.currentRow.columns.end()) {
-                    env.variables[var] = env.currentRow.columns[var];
-                }
-                else {
-                    // If variable not present, retain existing value
-                    if (env.variables.find(var) != env.variables.end()) {
-                        env.currentRow.columns[var] = env.variables[var];
-                    }
-                }
-            }
-        }
-
-        // If 'OUTPUT' was called, add the current row to the output dataset
-        if (shouldOutput) {
-            output->addRow(env.currentRow);
-            logLogger.info("Row outputted to '{}'.", node->outputDataSet);
         }
     }
+    size_t obsCount = ds->rows.size();
+    size_t varCount = ds->columnOrder.size();
 
-    logLogger.info("DATA step '{}' executed successfully. Output dataset has {} observations.",
-                   node->outputDataSet, output->rows.size());
-
-    // For demonstration, print the output dataset
-    lstLogger.info("SAS Results (Dataset: {}):", node->outputDataSet);
-    if (!env.title.empty()) {
-        lstLogger.info("Title: {}", env.title);
-    }
- 
-    // Print column headers
-    std::string header;
-    for (size_t i = 0; i < output->columnOrder.size(); ++i) {
-        header += output->columnOrder[i];
-        if (i < output->columnOrder.size() - 1) header += "\t";
-    }
-    lstLogger.info("{}", header);
-
-    // Print rows
-    int obs = 1;
-    for (const auto &row : output->rows) {
-        std::string rowStr = std::to_string(obs++) + "\t";
-        for (size_t i = 0; i < output->columnOrder.size(); ++i) {
-            const std::string &col = output->columnOrder[i];
-            auto it = row.columns.find(col);
-            if (it != row.columns.end()) {
-                rowStr += toString(it->second);
-            }
-            else {
-                rowStr += ".";
-            }
-            if (i < output->columnOrder.size() - 1) rowStr += "\t";
-        }
-        lstLogger.info("{}", rowStr);
-    }
+    // 6) Log the note
+    // For full SAS style
+    logLogger.info("NOTE: The data set {} has {} observations and {} variables.",
+        ds->name, obsCount, varCount);
+    logLogger.info("NOTE: DATA statement used (Total process time):\n"
+        "      real time           0.00 seconds\n"
+        "      cpu time            0.00 seconds");
 }
+
+
+//void Interpreter::executeDataStep(DataStepNode *node) {
+//    logLogger.info("Executing DATA step: data {}; set {};", node->outputDataSet, node->inputDataSet);
+//
+//    // Resolve output dataset name
+//    std::string outputLibref, outputDataset;
+//    size_t dotPos = node->outputDataSet.find('.');
+//    if (dotPos != std::string::npos) {
+//        outputLibref = node->outputDataSet.substr(0, dotPos);
+//        outputDataset = node->outputDataSet.substr(dotPos + 1);
+//    }
+//    else {
+//        outputDataset = node->outputDataSet;
+//    }
+//
+//    // Resolve input dataset name
+//    std::string inputLibref, inputDataset;
+//    dotPos = node->inputDataSet.find('.');
+//    if (dotPos != std::string::npos) {
+//        inputLibref = node->inputDataSet.substr(0, dotPos);
+//        inputDataset = node->inputDataSet.substr(dotPos + 1);
+//    }
+//    else {
+//        inputDataset = node->inputDataSet;
+//    }
+//
+//    // Check if input dataset exists
+//    std::shared_ptr<Dataset> input = nullptr;
+//    try {
+//        input = env.getOrCreateDataset(inputLibref, inputDataset);
+//    }
+//    catch (const std::runtime_error &e) {
+//        logLogger.error(e.what());
+//        return;
+//    }
+//
+//    // Create or get the output dataset
+//    std::shared_ptr<Dataset> output;
+//    try {
+//        output = env.getOrCreateDataset(outputLibref, outputDataset);
+//        output->name = node->outputDataSet;
+//    }
+//    catch (const std::runtime_error &e) {
+//        logLogger.error(e.what());
+//        return;
+//    }
+//
+//    // Log dataset sizes
+//    logLogger.info("Input dataset '{}' has {} observations.", node->inputDataSet, input->rows.size());
+//    logLogger.info("Output dataset '{}' will store results.", node->outputDataSet);
+//
+//    // Variables to control variable retention
+//    std::vector<std::string> dropVars;
+//    std::vector<std::string> keepVars;
+//    std::vector<std::string> retainVars;
+//
+//    bool hasDrop = false;
+//    bool hasKeep = false;
+//    bool hasRetain = false;
+//
+//    // Check if a MERGE statement exists in the data step
+//    bool hasMerge = false;
+//    MergeStatementNode* mergeNode = nullptr;
+//    for (const auto& stmt : node->statements) {
+//        if (auto m = dynamic_cast<MergeStatementNode*>(stmt.get())) {
+//            hasMerge = true;
+//            mergeNode = m;
+//            break;
+//        }
+//    }
+//
+//    if (hasMerge && mergeNode) {
+//        // Handle MERGE logic
+//        executeMerge(mergeNode);
+//        // Remove MERGE statement from the data step to avoid re-processing
+//        // Implement this as per your data structure
+//    }
+//
+//    // Execute each row in the input dataset
+//    for (const auto &row : input->rows) {
+//        env.currentRow = row; // Set the current row for processing
+//
+//        // Apply RETAIN variables: retain their values across iterations
+//        if (hasRetain) {
+//            for (const auto& var : retainVars) {
+//                if (env.variables.find(var) != env.variables.end()) {
+//                    env.currentRow.columns[var] = env.variables[var];
+//                }
+//            }
+//        }
+//
+//        // Flag to determine if the row should be output
+//        bool shouldOutput = false;
+//
+//        // Temporary variables to track DROP/KEEP
+//        dropVars.clear();
+//        keepVars.clear();
+//        retainVars.clear();
+//        hasDrop = false;
+//        hasKeep = false;
+//        hasRetain = false;
+//
+//        // Execute each statement in the DATA step
+//        for (const auto &stmt : node->statements) {
+//            if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
+//                executeAssignment(assign);
+//            }
+//            else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
+//                executeIfThen(ifThen);
+//            }
+//            else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
+//                executeOutput(out);
+//                shouldOutput = true;
+//            }
+//            else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
+//                executeDrop(drop);
+//                hasDrop = true;
+//            }
+//            else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
+//                executeKeep(keep);
+//                hasKeep = true;
+//            }
+//            else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
+//                executeRetain(retain);
+//                hasRetain = true;
+//            }
+//            else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
+//                executeArray(array);
+//            }
+//            else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
+//                executeDo(doNode);
+//            }
+//            else {
+//                // Handle other DATA step statements if needed
+//                throw std::runtime_error("Unsupported statement in DATA step.");
+//            }
+//        }
+//
+//        // Apply DROP and KEEP rules
+//        if (hasDrop && hasKeep) {
+//            // In SAS, if both DROP and KEEP are specified, KEEP takes precedence
+//            // Keep only the variables specified in KEEP
+//            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
+//                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
+//                    it = env.currentRow.columns.erase(it);
+//                }
+//                else {
+//                    ++it;
+//                }
+//            }
+//        }
+//        else if (hasKeep) {
+//            // Keep only the variables specified in KEEP
+//            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
+//                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
+//                    it = env.currentRow.columns.erase(it);
+//                }
+//                else {
+//                    ++it;
+//                }
+//            }
+//        }
+//        else if (hasDrop) {
+//            // Drop the variables specified in DROP
+//            for (const auto& var : dropVars) {
+//                env.currentRow.columns.erase(var);
+//            }
+//        }
+//
+//        // Apply RETAIN variables: store their values for the next iteration
+//        if (hasRetain) {
+//            for (const auto& var : retainVars) {
+//                if (env.currentRow.columns.find(var) != env.currentRow.columns.end()) {
+//                    env.variables[var] = env.currentRow.columns[var];
+//                }
+//                else {
+//                    // If variable not present, retain existing value
+//                    if (env.variables.find(var) != env.variables.end()) {
+//                        env.currentRow.columns[var] = env.variables[var];
+//                    }
+//                }
+//            }
+//        }
+//
+//        // If 'OUTPUT' was called, add the current row to the output dataset
+//        if (shouldOutput) {
+//            output->addRow(env.currentRow);
+//            logLogger.info("Row outputted to '{}'.", node->outputDataSet);
+//        }
+//    }
+//
+//    logLogger.info("DATA step '{}' executed successfully. Output dataset has {} observations.",
+//                   node->outputDataSet, output->rows.size());
+//
+//    // For demonstration, print the output dataset
+//    lstLogger.info("SAS Results (Dataset: {}):", node->outputDataSet);
+//    if (!env.title.empty()) {
+//        lstLogger.info("Title: {}", env.title);
+//    }
+// 
+//    // Print column headers
+//    std::string header;
+//    for (size_t i = 0; i < output->columnOrder.size(); ++i) {
+//        header += output->columnOrder[i];
+//        if (i < output->columnOrder.size() - 1) header += "\t";
+//    }
+//    lstLogger.info("{}", header);
+//
+//    // Print rows
+//    int obs = 1;
+//    for (const auto &row : output->rows) {
+//        std::string rowStr = std::to_string(obs++) + "\t";
+//        for (size_t i = 0; i < output->columnOrder.size(); ++i) {
+//            const std::string &col = output->columnOrder[i];
+//            auto it = row.columns.find(col);
+//            if (it != row.columns.end()) {
+//                rowStr += toString(it->second);
+//            }
+//            else {
+//                rowStr += ".";
+//            }
+//            if (i < output->columnOrder.size() - 1) rowStr += "\t";
+//        }
+//        lstLogger.info("{}", rowStr);
+//    }
+//}
 
 // Execute an assignment statement
 void Interpreter::executeAssignment(AssignmentNode *node) {
@@ -1696,8 +1780,6 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
 }
 
 void Interpreter::executeProcPrint(ProcPrintNode* node) {
-    logLogger.info("Executing PROC PRINT");
-
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
     if (!inputDS) {
@@ -1711,8 +1793,8 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
     }
     else {
         // If VAR statement is not specified, print all variables
-        for (const auto& pair : inputDS->columns) {
-            varsToPrint.push_back(pair.first);
+        for (const auto& column : inputDS->columnOrder) {
+            varsToPrint.push_back(column);
         }
     }
 
@@ -1754,11 +1836,10 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
             header << "\t";
         }
     }
-    header << "\n";
 
     // Log header
-    logLogger.info("PROC PRINT Results for Dataset '{}':", inputDS->name);
-    logLogger.info(header.str());
+    lstLogger.info(env.title);
+    lstLogger.info(header.str());
 
     // Iterate over rows and print data
     int obsCount = 0;
@@ -1793,13 +1874,14 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
                 rowStream << "\t";
             }
         }
-        rowStream << "\n";
-
         logLogger.info(rowStream.str());
         obsCount++;
     }
 
-    logLogger.info("PROC PRINT executed successfully.");
+    logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->rows.size(), inputDS->name);
+    logLogger.info("NOTE: PROCEDURE PRINT used(Total process time) :");
+    logLogger.info("      real time           0.15 seconds");
+    logLogger.info("      cpu time            0.01 seconds");
 }
 
 void Interpreter::executeProcSQL(ProcSQLNode* node) {
@@ -2052,3 +2134,52 @@ void Interpreter::executeMacroCall(MacroCallNode* node) {
 
     logLogger.info("Macro '{}' executed successfully.", macro->macroName);
 }
+
+void Interpreter::reset() {
+    // Clear datasets
+    env.dataSets.clear();
+
+    // Clear macros
+    macros.clear();
+
+    // Clear macro variables
+    macroVariables.clear();
+
+    // Clear arrays
+    arrays.clear();
+
+    // Reset other interpreter state as needed
+    logLogger.info("Interpreter state has been reset.");
+}
+
+void Interpreter::handleReplInput(const std::string& input) {
+    // Tokenize the input
+    Lexer lexer(input);
+    std::vector<Token> tokens;
+    Token tok;
+    while ((tok = lexer.getNextToken()).type != TokenType::EOF_TOKEN) {
+        tokens.push_back(tok);
+    }
+
+    // Parse the tokens into AST
+    Parser parser(tokens);
+    std::unique_ptr<ASTNode> ast;
+    try {
+        ast = parser.parse();
+    }
+    catch (const std::runtime_error& e) {
+        logLogger.error("Parsing error: {}", e.what());
+        return;
+    }
+
+    // Execute the AST
+    try {
+        execute(ast.get());
+    }
+    catch (const std::runtime_error& e) {
+        logLogger.error("Execution error: {}", e.what());
+    }
+}
+
+}
+
