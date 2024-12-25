@@ -2155,17 +2155,13 @@ void Interpreter::reset() {
 void Interpreter::handleReplInput(const std::string& input) {
     // Tokenize the input
     Lexer lexer(input);
-    std::vector<Token> tokens;
-    Token tok;
-    while ((tok = lexer.getNextToken()).type != TokenType::EOF_TOKEN) {
-        tokens.push_back(tok);
-    }
+    std::vector<Token> tokens = lexer.tokenize();
 
     // Parse the tokens into AST
     Parser parser(tokens);
-    std::unique_ptr<ASTNode> ast;
+    ParseResult parseResult;
     try {
-        ast = parser.parse();
+        parseResult = parser.parseStatement();
     }
     catch (const std::runtime_error& e) {
         logLogger.error("Parsing error: {}", e.what());
@@ -2174,7 +2170,9 @@ void Interpreter::handleReplInput(const std::string& input) {
 
     // Execute the AST
     try {
-        execute(ast.get());
+        if (parseResult.status == ParseStatus::PARSE_SUCCESS) {
+            execute(parseResult.node.get());
+        }
     }
     catch (const std::runtime_error& e) {
         logLogger.error("Execution error: {}", e.what());

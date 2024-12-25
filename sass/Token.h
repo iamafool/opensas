@@ -16,6 +16,8 @@ namespace sass {
         KEYWORD_ELSE,
         KEYWORD_ELSE_IF,
         KEYWORD_OUTPUT,
+        KEYWORD_INPUT,
+        KEYWORD_DATALINES,
         KEYWORD_RUN,
         KEYWORD_OPTIONS,
         KEYWORD_LIBNAME,

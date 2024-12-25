@@ -303,6 +303,16 @@ namespace sass {
         return Token{ TokenType::EOF_TOKEN, "", line, col };
     }
 
+    std::vector<Token> Lexer::tokenize()
+    {
+        std::vector<Token> tokens;
+        Token tok;
+        while ((tok = getNextToken()).type != TokenType::EOF_TOKEN) {
+            tokens.push_back(tok);
+        }
+        return tokens;
+    }
+
     Token Lexer::macroToken() {
         getChar(); // Consume '%'
         std::string value;

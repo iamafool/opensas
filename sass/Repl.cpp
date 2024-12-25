@@ -58,11 +58,7 @@ namespace sass {
             // Now try to parse the entire buffer
             // 1) Lex
             Lexer lexer(inputBuffer);
-            std::vector<Token> tokens;
-            Token tok;
-            while ((tok = lexer.getNextToken()).type != TokenType::EOF_TOKEN) {
-                tokens.push_back(tok);
-            }
+            std::vector<Token> tokens = lexer.tokenize();
 
             // 2) Parse
             Parser parser(tokens);
