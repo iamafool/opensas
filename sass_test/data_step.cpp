@@ -8,7 +8,14 @@ using namespace sass;
 
 // Test case for executing a simple DATA step and PROC PRINT
 TEST_F(SassTest, DataStepOutput1) {
-    Lexer lexer(DataStepOutput1);
+    std::string code = R"(
+        data a;
+           a = 10;
+           output;
+        run;
+    )";
+
+    Lexer lexer(code);
     std::vector<Token> tokens = lexer.tokenize();
 
     // We can print or check token types. 
@@ -51,3 +58,34 @@ TEST_F(SassTest, DataStepOutput1) {
     EXPECT_EQ(std::get<double>(testDataset->rows[0].columns.at("a")), 10.0);
 }
 
+TEST_F(SassTest, DataStepInput1) {
+    std::string code = R"(
+        data employees;
+          input name age;
+          datalines;
+john 23
+mary 30
+;
+        run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseStatement();
+    ASSERT_TRUE(parseResult.status == ParseStatus::PARSE_SUCCESS);
+
+    // 3) Interpret
+    interpreter->execute(parseResult.node.get());
+
+    // 4) Check dataset WORK.employees => 2 obs, 2 vars
+    auto it = env->dataSets.find("WORK.employees");
+    ASSERT_NE(it, env->dataSets.end());
+    auto ds = it->second;
+    ASSERT_EQ(ds->rows.size(), 2u);
+    // row[0] => name="john", age=23
+    // row[1] => name="mary", age=30
+}

@@ -72,6 +72,10 @@ namespace sass {
         std::unique_ptr<ASTNode> parseMacroDefinition();
         std::unique_ptr<ASTNode> parseMacroCall();
 
+        std::unique_ptr<ASTNode> parseInput();
+
+        std::unique_ptr<ASTNode> parseDatalines();
+
         // Expression parsing with precedence
         std::unique_ptr<ASTNode> parseExpression(int precedence = 0);
         std::unique_ptr<ASTNode> parsePrimary();

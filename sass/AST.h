@@ -308,5 +308,17 @@ namespace sass {
         std::vector<std::unique_ptr<ASTNode>> arguments;
     };
 
+    // input var1 var2 ...;
+    class InputNode : public ASTNode {
+    public:
+        // For each declared variable: (varName, isString)
+        std::vector<std::pair<std::string, bool>> variables;
+    };
+
+    // datalines; <lines> ;
+    class DatalinesNode : public ASTNode {
+    public:
+        std::vector<std::string> lines;  // the raw lines
+    };
 }
 #endif // AST_H

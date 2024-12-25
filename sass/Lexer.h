@@ -24,8 +24,19 @@ namespace sass {
         void skipWhitespace();
         Token number();
         Token stringLiteral();
+        Token identifierOrKeyword();
         Token macroToken(); // For %macro, %let, etc.
         Token macroVariable(); // For &varname or &&varname
+        bool inDatalinesMode = false;  // <-- We'll set this to true after we see 'datalines;'
+
+        // Because we only enter "inDatalinesMode" after reading `datalines;`,
+        // we also track if we've *just* seen the 'KEYWORD_DATALINES' token
+        // to see if next token is SEMICOLON => then switch mode. 
+        bool justSawDatalinesKeyword = false;
+
+        // read raw lines until a line that is just ';'
+        Token readDatalinesContent();
+
         std::unordered_map<std::string, TokenType> keywords;
     };
 

@@ -13,13 +13,6 @@ protected:
     std::shared_ptr<spdlog::logger> logLogger;
     std::shared_ptr<spdlog::logger> lstLogger;
 
-    std::string DataStepOutput1 = R"(
-        data a;
-           a = 10;
-           output;
-        run;
-    )";
-
     SassTest() {
         env = new DataEnvironment();
 

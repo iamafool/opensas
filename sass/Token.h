@@ -6,6 +6,7 @@
 namespace sass {
     enum class TokenType {
         IDENTIFIER,
+        DOLLAR,
         NUMBER,
         STRING,
 
@@ -18,6 +19,7 @@ namespace sass {
         KEYWORD_OUTPUT,
         KEYWORD_INPUT,
         KEYWORD_DATALINES,
+        DATALINES_CONTENT,
         KEYWORD_RUN,
         KEYWORD_OPTIONS,
         KEYWORD_LIBNAME,

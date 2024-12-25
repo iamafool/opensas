@@ -109,11 +109,26 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     // Reset currentRow
     env.currentRow.columns.clear();
 
+    std::vector<std::pair<std::string, bool>> inputVars;
+    std::vector<std::string> dataLines;
+
     // 3) Execute each statement
     bool shouldOutput = false;
 
     for (auto& stmt : node->statements) {
-        if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
+        if (auto inp = dynamic_cast<InputNode*>(stmt.get())) {
+            // store those variable names
+            for (auto& var : inp->variables) {
+                inputVars.push_back(var);
+            }
+        }
+        else if (auto dl = dynamic_cast<DatalinesNode*>(stmt.get())) {
+            // store raw lines
+            for (auto& line : dl->lines) {
+                dataLines.push_back(line);
+            }
+        }
+        else if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
             // Evaluate the right-hand side
             Value val = evaluate(assign->expression.get());
             // Set the variable
@@ -135,6 +150,54 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     // But in real SAS, you must call 'output;' or no record is written 
     // (except if there's an implied output at the bottom).
     // We'll do nothing here unless you want an implied output.
+
+        // After all statements are processed, if we have input variables + datalines,
+    // we create rows from them. In real SAS, each dataline gets read into
+    // the variables in order. For instance:
+    //   input name $ age;
+    //   datalines;
+    //   john 23
+    //   mary 30
+    //   ;
+    //
+    // We'll do a naive parser: each line => tokens => store in row.
+
+    if (!inputVars.empty() && !dataLines.empty()) {
+        for (auto& dlLine : dataLines) {
+            // split by whitespace (super naive)
+            std::istringstream iss(dlLine);
+            std::vector<std::string> fields;
+            std::string f;
+            while (iss >> f) {
+                fields.push_back(f);
+            }
+
+            Row row;
+            for (size_t i = 0; i < inputVars.size() && i < fields.size(); ++i) {
+                std::string& varName = inputVars[i].first;
+                std::string& val = fields[i];
+                // Suppose we check if varName ends with '$' => string
+                // else numeric
+                if (!varName.empty() && inputVars[i].second == true) {
+                    // store as string
+                    std::string realVarName = varName.substr(0, varName.size() - 1);
+                    row.columns[realVarName] = val;
+                }
+                else {
+                    // store numeric
+                    try {
+                        double d = std::stod(val);
+                        row.columns[varName] = d;
+                    }
+                    catch (...) {
+                        row.columns[varName] = std::nan("");
+                    }
+                }
+            }
+            ds->addRow(row);
+        }
+    }
+
 
     // 5) Count observations & variables
     // Variables can be gleaned from ds->columnOrder or from the columns in the first row
@@ -1880,8 +1943,8 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
 
     logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->rows.size(), inputDS->name);
     logLogger.info("NOTE: PROCEDURE PRINT used(Total process time) :");
-    logLogger.info("      real time           0.15 seconds");
-    logLogger.info("      cpu time            0.01 seconds");
+    logLogger.info("      real time           0.00 seconds");
+    logLogger.info("      cpu time            0.00 seconds");
 }
 
 void Interpreter::executeProcSQL(ProcSQLNode* node) {

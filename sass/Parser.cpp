@@ -1,4 +1,5 @@
 #include "Parser.h"
+#include "utility.h"
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
@@ -73,6 +74,13 @@ ParseResult Parser::parseStatement() {
 	std::unique_ptr<ASTNode> astNode = nullptr;
 	try {
 		switch (t.type) {
+        case TokenType::KEYWORD_INPUT:
+            advance();
+            astNode = parseInput(); break;
+        case TokenType::KEYWORD_DATALINES:
+            advance();
+            consume(TokenType::SEMICOLON, "Expected ';' after datalines");
+            astNode = parseDatalines(); break;
 		case TokenType::KEYWORD_DATA:
 			astNode = parseDataStep(); break;
 		case TokenType::KEYWORD_OPTIONS:
@@ -1172,6 +1180,77 @@ std::unique_ptr<ASTNode> Parser::parseMacroCall() {
     }
 
     consume(TokenType::SEMICOLON, "Expected ';' after macro call");
+    return node;
+}
+
+std::unique_ptr<ASTNode> Parser::parseInput() {
+    // we already consumed "input" token
+    auto node = std::make_unique<InputNode>();
+
+    // gather variable names until semicolon
+    while (true) {
+        Token t = peek();
+        if (t.type == TokenType::SEMICOLON || t.type == TokenType::EOF_TOKEN) {
+            break;
+        }
+        // Expect an identifier: e.g. name, age, name$
+        if (t.type == TokenType::IDENTIFIER) {
+            // This is a variable name
+            std::string varName = t.text;
+            advance(); // consume
+
+            // Next token might be DOLLAR => string var
+            Token nextT = peek();
+            bool isString = false;
+            if (nextT.type == TokenType::DOLLAR) {
+                // then we consume the DOLLAR token
+                advance();
+                isString = true;
+            }
+
+            // store the variable in node->variables
+            // maybe store them as (name, isString)
+            node->variables.push_back(std::make_pair(varName, isString));
+        }
+        else {
+            throw std::runtime_error("Expected variable name in INPUT statement, got: " + t.text);
+        }
+    }
+
+    // expect semicolon
+    consume(TokenType::SEMICOLON, "Expected ';' after INPUT statement");
+    return node;
+}
+
+std::unique_ptr<ASTNode> Parser::parseDatalines() {
+    // We already consumed KEYWORD_DATALINES in parseStatement(),
+    // Next token should be SEMICOLON, which your parseStatement might handle, 
+    // or we do:
+    // consume(TokenType::SEMICOLON, "Expected ';' after DATALINES");
+    // Then the next token we see should be DATALINES_CONTENT
+    Token t = peek();
+
+    if (t.type == TokenType::EOF_TOKEN)
+        return nullptr;
+
+    if (t.type != TokenType::DATALINES_CONTENT) {
+        throw std::runtime_error("Expected DATALINES_CONTENT token after 'datalines;'");
+    }
+    advance(); // consume it
+
+    auto node = std::make_unique<DatalinesNode>();
+    // Let's split the text by lines
+    std::vector<std::string> lines;
+    {
+        std::istringstream iss(t.text);
+        std::string line;
+        while (std::getline(iss, line)) {
+            if (!line.empty()) {
+                lines.push_back(line);
+            }
+        }
+    }
+    node->lines = lines;
     return node;
 }
 

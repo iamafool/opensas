@@ -1,4 +1,5 @@
 #include "Lexer.h"
+#include "utility.h"
 #include <cctype>
 #include <algorithm>
 #include <stdexcept>
@@ -13,6 +14,7 @@ namespace sass {
         keywords["CHISQ"] = TokenType::KEYWORD_CHISQ;
         keywords["CREATE"] = TokenType::KEYWORD_CREATE;
         keywords["DATA"] = TokenType::KEYWORD_DATA;
+        keywords["DATALINES"] = TokenType::KEYWORD_DATALINES;
         keywords["DELETE"] = TokenType::KEYWORD_DELETE;
         keywords["DO"] = TokenType::KEYWORD_DO;
         keywords["DUPLICATES"] = TokenType::KEYWORD_DUPLICATES;
@@ -26,6 +28,7 @@ namespace sass {
         keywords["HAVING"] = TokenType::KEYWORD_HAVING;
         keywords["IF"] = TokenType::KEYWORD_IF;
         keywords["INNER"] = TokenType::KEYWORD_INNER;
+        keywords["INPUT"] = TokenType::KEYWORD_INPUT;
         keywords["INSERT"] = TokenType::KEYWORD_INSERT;
         keywords["JOIN"] = TokenType::KEYWORD_JOIN;
         keywords["LABEL"] = TokenType::KEYWORD_LABEL;
@@ -123,23 +126,28 @@ namespace sass {
         return token;
     }
 
-    Token Lexer::getNextToken() {
-        // Handle macro statements starting with '%'
-        if (peekChar() == '%') {
-            return macroToken();
+    // We detect if this identifier is "DATA", "DATALINES", "INPUT", etc.
+    Token Lexer::identifierOrKeyword() {
+        std::string ident;
+        while (pos < input.size() && (isalnum(input[pos]) || input[pos] == '_')) {
+            ident += input[pos];
+            pos++;
+            col++;
         }
+        // Convert to uppercase for case-insensitive matching
+        std::string upperIdent = ident;
+        for (auto& c : upperIdent) c = toupper(c);
 
-        // Handle macro variables starting with '&'
-        if (peekChar() == '&') {
-            return macroVariable();
-        }
+        if (upperIdent == "DATALINES")
+            justSawDatalinesKeyword = true;
 
-        while (pos < input.size()) {
-            char current = input[pos];
-
-            // Skip whitespace
-            if (isspace(current)) {
-                if (current == '\n') {
+        // Check for 'ELSE IF' combination
+        if (upperIdent == "ELSE" && pos < input.size()) {
+            size_t savedPos = pos;
+            int savedCol = col;
+            // Look ahead for 'IF'
+            while (pos < input.size() && isspace(input[pos])) {
+                if (input[pos] == '\n') {
                     line++;
                     col = 1;
                 }
@@ -147,8 +155,80 @@ namespace sass {
                     col++;
                 }
                 pos++;
-                continue;
             }
+            std::string nextIdent;
+            while (pos < input.size() && (isalnum(input[pos]) || input[pos] == '_')) {
+                nextIdent += input[pos];
+                pos++;
+                col++;
+            }
+            std::string upperNextIdent = nextIdent;
+            for (auto& c : upperNextIdent) c = toupper(c);
+            if (upperNextIdent == "IF") {
+                return Token{ TokenType::KEYWORD_ELSE_IF, "ELSE IF", line, col - (int)nextIdent.size() - 5 };
+            }
+            else {
+                // Not 'ELSE IF', rollback and return 'ELSE'
+                pos = savedPos;
+                col = savedCol;
+                return Token{ TokenType::KEYWORD_ELSE, "ELSE", line, col - (int)ident.size() };
+            }
+        }
+
+        // Check if it's a keyword
+        if (keywords.find(upperIdent) != keywords.end()) {
+            return Token{ keywords.at(upperIdent), ident, line, static_cast<int>(col - ident.size()) };
+        }
+        else {
+            return Token{ TokenType::IDENTIFIER, ident, line, static_cast<int>(col - ident.size()) };
+        }
+    }
+
+
+    Token Lexer::getNextToken() {
+        // If we're already inDatalinesMode, read all lines until we see a line that is ';'
+        if (inDatalinesMode) {
+            return readDatalinesContent();
+        }
+
+        skipWhitespace();
+
+        char c = peekChar();
+
+        // If we just saw the 'KEYWORD_DATALINES' token, the *very next* token should be
+        // either SEMICOLON => which triggers inDatalinesMode on the next call
+        // or something else. Let's handle that logic:
+        if (justSawDatalinesKeyword) {
+            justSawDatalinesKeyword = false;  // reset
+            if (c == ';') {
+                // produce a SEMICOLON token
+                getChar(); // consume
+                Token tk{ TokenType::SEMICOLON, ";", line, col - 1 };
+                // Next time getNextToken is called => we set inDatalinesMode = true
+                // Because in SAS, "datalines;" => from next line onward we read data
+                inDatalinesMode = true;
+                return tk;
+            }
+            // else fall through as normal tokens if user typed "datalines X" => error in parser
+        }
+
+        // Handle macro statements starting with '%'
+        if (c == '%') {
+            return macroToken();
+        }
+
+        // Handle macro variables starting with '&'
+        if (c == '&') {
+            return macroVariable();
+        }
+
+        if (c == '$') {
+            getChar(); // consume
+            return { TokenType::DOLLAR, "$", line, col - 1 };
+        }
+
+        while (pos < input.size()) {
+            char current = input[pos];
 
             // Handle comments
             if (current == '*') {
@@ -242,57 +322,7 @@ namespace sass {
 
             // Handle identifiers and keywords
             if (isalpha(current) || current == '_') {
-                std::string ident;
-                while (pos < input.size() && (isalnum(input[pos]) || input[pos] == '_')) {
-                    ident += input[pos];
-                    pos++;
-                    col++;
-                }
-                // Convert to uppercase for case-insensitive matching
-                std::string upperIdent = ident;
-                for (auto& c : upperIdent) c = toupper(c);
-
-                // Check for 'ELSE IF' combination
-                if (upperIdent == "ELSE" && pos < input.size()) {
-                    size_t savedPos = pos;
-                    int savedCol = col;
-                    // Look ahead for 'IF'
-                    while (pos < input.size() && isspace(input[pos])) {
-                        if (input[pos] == '\n') {
-                            line++;
-                            col = 1;
-                        }
-                        else {
-                            col++;
-                        }
-                        pos++;
-                    }
-                    std::string nextIdent;
-                    while (pos < input.size() && (isalnum(input[pos]) || input[pos] == '_')) {
-                        nextIdent += input[pos];
-                        pos++;
-                        col++;
-                    }
-                    std::string upperNextIdent = nextIdent;
-                    for (auto& c : upperNextIdent) c = toupper(c);
-                    if (upperNextIdent == "IF") {
-                        return Token{ TokenType::KEYWORD_ELSE_IF, "ELSE IF", line, col - (int)nextIdent.size() - 5 };
-                    }
-                    else {
-                        // Not 'ELSE IF', rollback and return 'ELSE'
-                        pos = savedPos;
-                        col = savedCol;
-                        return Token{ TokenType::KEYWORD_ELSE, "ELSE", line, col - (int)ident.size() };
-                    }
-                }
-
-                // Check if it's a keyword
-                if (keywords.find(upperIdent) != keywords.end()) {
-                    return Token{ keywords.at(upperIdent), ident, line, static_cast<int>(col - ident.size()) };
-                }
-                else {
-                    return Token{ TokenType::IDENTIFIER, ident, line, static_cast<int>(col - ident.size()) };
-                }
+                return identifierOrKeyword();
             }
 
             // If we reach here, it's an unknown character
@@ -339,4 +369,58 @@ namespace sass {
         return Token{ TokenType::MACRO_VAR, "&" + value, line, col };
     }
 
+    // Actual reading of datalines content
+    Token Lexer::readDatalinesContent() {
+        // We'll read line by line until we see a line whose "trimmed" content is ";"
+        // We'll accumulate those lines (minus the final ";")
+        // Then produce a single DATALINES_CONTENT token.
+        std::string allLines;
+        while (true) {
+            if (pos >= input.size()) {
+                // End of file => done
+                inDatalinesMode = false;
+                break;
+            }
+
+            // read one line from the raw input
+            int lineStart = line;
+            size_t colStart = col;
+
+            std::string currentLine;
+            while (pos < input.size() && peekChar() != '\n') {
+                currentLine.push_back(getChar());
+            }
+
+            // consume newline if present
+            if (pos < input.size() && peekChar() == '\n') {
+                getChar(); // consume it
+            }
+
+            // We advanced line, col in getChar()
+            line++;
+            col = 1;
+
+            // Trim
+            std::string trimmedLine = trim(currentLine);
+
+            if (trimmedLine == ";") {
+                // This is the end of datalines block
+                inDatalinesMode = false;
+                break;
+            }
+
+            // Accumulate the untrimmed line or minimal trimmed version
+            // Usually we keep them as is, or you can store them with trailing spaces removed.
+            // We'll store them with minimal trailing whitespace
+            allLines += currentLine + "\n";
+        }
+
+        // produce the one token
+        Token tok;
+        tok.type = TokenType::DATALINES_CONTENT;
+        tok.text = allLines;
+        tok.line = line;
+        tok.col = col;
+        return tok;
+    }
 }

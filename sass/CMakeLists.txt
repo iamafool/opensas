@@ -8,7 +8,7 @@ add_compile_options(/utf-8)
 
 add_library (libsass
 "Token.h" "Lexer.h" "Lexer.cpp" "AST.h" "Parser.h" "Parser.cpp" "DataEnvironment.h" "Interpreter.h" "Interpreter.cpp" "Sorter.h"
-)
+ "utility.h")
 
 # Add source to this project's executable.
 add_executable (sass "sass.cpp" "sass.h" "Repl.h" "Repl.cpp")
