@@ -10,7 +10,7 @@ if (POLICY CMP0141)
 endif()
 
 project ("sass_test")
-project ("sass")
+project ("sass" LANGUAGES CXX C)
 
 # Include sub-projects.
 add_subdirectory ("sass_test")

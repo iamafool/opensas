@@ -10,6 +10,7 @@
 #include <set>
 #include "Lexer.h"
 #include "Parser.h"
+#include "PDV.h"
 
 namespace sass {
 // Execute the entire program
@@ -79,6 +80,8 @@ void Interpreter::execute(ASTNode *node) {
 
 // Execute a DATA step
 void Interpreter::executeDataStep(DataStepNode* node) {
+    PDV pdv;
+
     // 1) Determine output dataset name (libref + dataset)
     std::string libref;
     std::string dsName;
@@ -100,6 +103,33 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     auto ds = env.getOrCreateDataset(libref, dsName);
     ds->rows.clear();          // fresh start
     ds->columnOrder.clear();
+
+    // Gather statements for "retain", "keep", "drop", "input", "set", etc.
+    // DataStepAttributes dsAttrs;
+    // parseDataStepStatements(node->statements, dsAttrs);
+
+        // 3) If "SET" statement => read from input dataset
+    //    If "MERGE" => read from multiple input
+    //    If "INPUT" => read from DATALINES or external file 
+    //    Or if none => single iteration
+    // auto inDatasets = dsAttrs.setDatasets;
+    // for each row in inDatasets, or if none => single iteration
+    //while (nextRowAvailable(inDatasets, pdv)) {
+    //    // 3.1) fill PDV from the row
+    //    fillPDVFromInput(pdv, inDatasets);
+
+    //    // 3.2) set up retentions or variable defaults
+    //    pdv.resetNonRetainedExceptRetainedVars(dsAttrs.retainVars);
+
+    //    // 3.3) interpret each statement in the data step
+    //    for (auto& stmt : node->statements) {
+    //        executeDataStepStatement(stmt.get(), pdv, outDataset, dsAttrs);
+    //    }
+
+    //    // If user explicitly calls "output;" you might have set a flag => addRow to outDataset
+    //    // Or if there's an implied output, do it here
+    //}
+
 
     // Keep track that we¡¯re in a DATA step
     // In real SAS, we'd do multiple passes for each input row if there's a SET, 

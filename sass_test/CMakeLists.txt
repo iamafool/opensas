@@ -5,12 +5,14 @@ enable_testing()
 include_directories("c:/workspace/c++/spdlog-1.15.0/include")
 include_directories("c:/workspace/c++/googletest-main/googletest/include/")
 include_directories("c:/workspace/c++/sass/sass/")
+include_directories("c:/workspace/c++/sashelper_qt/")
+include_directories("c:/workspace/c++/boost_1_86_0/")
 link_directories("c:/workspace/c++/googletest-main/build/lib/Debug/")
 
 add_compile_options(/utf-8)
 
 # Add your test executable
-add_executable(runTests test_main.cpp   "data_step.cpp" fixture.h)
+add_executable(runTests test_main.cpp   "data_step.cpp" fixture.h "sas7bdat.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
     set_property(TARGET runTests PROPERTY CXX_STANDARD 20)

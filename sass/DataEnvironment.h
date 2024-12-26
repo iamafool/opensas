@@ -11,72 +11,9 @@
 #include <sstream>
 #include <iostream>
 #include <map>
+#include "Dataset.h"
 
 namespace sass {
-    // Define a variant type to hold different data types
-    using Value = std::variant<double, std::string>;
-
-    // Represents a single row in a dataset
-    struct Row {
-        std::unordered_map<std::string, Value> columns;
-    };
-
-    // Represents a single column in the dataset. It maps column names to their values.
-    using Column = std::vector<Value>;
-
-    // Represents a dataset containing multiple rows
-    class Dataset {
-    public:
-        std::string name;
-        std::vector<Row> rows;
-
-        // Optional: Define column order for consistent output
-        std::vector<std::string> columnOrder;
-
-        // Method to add a row to the dataset
-        void addRow(const Row& row) {
-            // Ensure columns are consistent with columnOrder
-            // If columnOrder is empty, initialize it with the first row's columns
-            if (columnOrder.empty()) {
-                for (const auto& [col, _] : row.columns) {
-                    columnOrder.push_back(col);
-                }
-            }
-            rows.push_back(row);
-        }
-
-        // Method to print the dataset (for debugging)
-        void print() const {
-            // Print column headers
-            for (size_t i = 0; i < columnOrder.size(); ++i) {
-                std::cout << columnOrder[i];
-                if (i < columnOrder.size() - 1) std::cout << "\t";
-            }
-            std::cout << "\n";
-
-            // Print rows
-            for (const auto& row : rows) {
-                for (size_t i = 0; i < columnOrder.size(); ++i) {
-                    const std::string& col = columnOrder[i];
-                    auto it = row.columns.find(col);
-                    if (it != row.columns.end()) {
-                        if (std::holds_alternative<double>(it->second)) {
-                            std::cout << std::get<double>(it->second);
-                        }
-                        else {
-                            std::cout << std::get<std::string>(it->second);
-                        }
-                    }
-                    else {
-                        std::cout << ".";
-                    }
-                    if (i < columnOrder.size() - 1) std::cout << "\t";
-                }
-                std::cout << "\n";
-            }
-        }
-    };
-
     // Manages datasets, global options, librefs, and titles
     class DataEnvironment {
     public:
@@ -221,6 +158,10 @@ namespace sass {
 
             file.close();
         }
+
+        std::shared_ptr<Dataset> loadSas7bdat(const std::string& filepath, const std::string& dsName); 
+
+        void saveSas7bdat(const std::string& dsName, const std::string& filepath);
 
         // Helper function to split a string by a delimiter
         std::vector<std::string> split(const std::string& s, char delimiter) const {
