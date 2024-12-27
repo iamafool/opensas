@@ -12,11 +12,16 @@
 #include <iostream>
 #include <map>
 #include "Dataset.h"
+#include "Library.h"
+#include "sasdoc.h"
 
 namespace sass {
     // Manages datasets, global options, librefs, and titles
     class DataEnvironment {
     public:
+        DataEnvironment();
+        ~DataEnvironment();
+
         // Store datasets by name
         std::unordered_map<std::string, std::shared_ptr<Dataset>> dataSets;
 
@@ -47,27 +52,7 @@ namespace sass {
         }
 
         // Retrieve or create a dataset
-        std::shared_ptr<Dataset> getOrCreateDataset(const std::string& libref, const std::string& datasetName) {
-            if (datasetName.empty()) {
-                return currentDataSet;
-            }
-            
-            std::string fullName = resolveLibref(libref, datasetName);
-
-            auto it = dataSets.find(fullName);
-            if (it != dataSets.end()) {
-                setCurrentDataSet(it->second);
-                return it->second;
-            }
-            else {
-                // Create a new dataset
-                auto dataset = std::make_shared<Dataset>();
-                dataset->name = fullName;
-                dataSets[fullName] = dataset;
-                setCurrentDataSet(dataset);
-                return dataset;
-            }
-        }
+        std::shared_ptr<Dataset> getOrCreateDataset(const std::string& datasetName);
 
         // Resolve libref and dataset name to a full dataset name
         std::string resolveLibref(const std::string& libref, const std::string& datasetName) const {
@@ -124,7 +109,7 @@ namespace sass {
 
         // Load a dataset from a CSV file (for demonstration)
         void loadDatasetFromCSV(const std::string& libref, const std::string& datasetName, const std::string& filepath) {
-            auto dataset = getOrCreateDataset(libref, datasetName);
+            auto dataset = getOrCreateDataset(datasetName);
             std::ifstream file(filepath);
             if (!file.is_open()) {
                 throw std::runtime_error("Failed to open CSV file: " + filepath);
@@ -163,6 +148,8 @@ namespace sass {
 
         void saveSas7bdat(const std::string& dsName, const std::string& filepath);
 
+        void saveSas7bdat(const std::string& dsName);
+
         // Helper function to split a string by a delimiter
         std::vector<std::string> split(const std::string& s, char delimiter) const {
             std::vector<std::string> tokens;
@@ -184,6 +171,33 @@ namespace sass {
         std::shared_ptr<Dataset> getCurrentDataSet() {
             return currentDataSet;
         }
+
+        // The existing method for LIBNAME statement:
+        void defineLibrary(const std::string& libref, const std::string& path, LibraryAccess access);
+
+        // Retrieve a library pointer
+        std::shared_ptr<Library> getLibrary(const std::string& libref);
+
+        // Possibly a method to remove a library
+        void removeLibrary(const std::string& libref);
+
+        // Possibly a method to load a dataset: libref.datasetName
+        bool loadDataset(const std::string& libref, const std::string& dsName) {
+            auto lib = getLibrary(libref);
+            if (!lib) {
+                std::cerr << "Library not found: " << libref << std::endl;
+                return false;
+            }
+            return lib->loadDatasetFromSas7bdat(dsName);
+        }
+
+    private:
+        // A map from libref => Library instance
+        std::unordered_map<std::string, std::shared_ptr<Library>> libraries;
+
+        // for WORK
+        std::string workFolder;
+        bool workCreated;
 
     };
 

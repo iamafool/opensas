@@ -413,10 +413,6 @@ namespace sass {
 		return formatRec01;
 	}
 
-	SasDoc::~SasDoc()
-	{
-	}
-
 	int SasDoc::GetVarNo(std::wstring varName)
 	{
 		if (varName.size() == 0)

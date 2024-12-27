@@ -40,11 +40,17 @@ namespace sass {
         FATTRSTR attrs;
     };
 
-    class SasDoc : Dataset
+
+    class SasDoc : public Dataset
     {
     public:
         SasDoc();
-        virtual ~SasDoc();
+        ~SasDoc() override = default;
+        void addRow(const Row& row) override {
+            // Possibly convert row to readstat logic or store in "values" array
+            // or call the base if we want to keep normal row-based storage
+            Dataset::addRow(row);
+        }
         static int handle_metadata(readstat_metadata_t* metadata, void* ctx);
         static int handle_metadata_xpt(readstat_metadata_t* metadata, void* ctx);
         static int handle_variable(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);

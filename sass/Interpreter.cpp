@@ -1,4 +1,6 @@
 #include "Interpreter.h"
+#include "Interpreter.h"
+#include "Interpreter.h"
 #include "Sorter.h"
 #include <iostream>
 #include <stdexcept>
@@ -11,6 +13,8 @@
 #include "Lexer.h"
 #include "Parser.h"
 #include "PDV.h"
+
+using namespace std;
 
 namespace sass {
 // Execute the entire program
@@ -78,405 +82,412 @@ void Interpreter::execute(ASTNode *node) {
     }
 }
 
-// Execute a DATA step
-void Interpreter::executeDataStep(DataStepNode* node) {
-    PDV pdv;
+void Interpreter::executeDataStepStatement(
+    ASTNode* stmt,
+    PDV& pdv,
+    SasDoc* outDoc,
+    bool& doOutputThisRow)
+{
+    // This function modifies pdv or sets doOutputThisRow if an OutputNode
+    // We'll do small examples:
 
-    // 1) Determine output dataset name (libref + dataset)
-    std::string libref;
-    std::string dsName;
-
-    // Suppose node->outputDataSet is "a", or "mylib.a"
-    auto full = node->outputDataSet;
-    auto dotPos = full.find('.');
-    if (dotPos == std::string::npos) {
-        libref = "";
-        dsName = full;
-    }
-    else {
-        libref = full.substr(0, dotPos);
-        dsName = full.substr(dotPos + 1);
-    }
-
-    // 2) Create the dataset in the environment
-    // env.getOrCreateDataset(libref, dsName) might already exist; let's create a fresh dataset for demonstration
-    auto ds = env.getOrCreateDataset(libref, dsName);
-    ds->rows.clear();          // fresh start
-    ds->columnOrder.clear();
-
-    // Gather statements for "retain", "keep", "drop", "input", "set", etc.
-    // DataStepAttributes dsAttrs;
-    // parseDataStepStatements(node->statements, dsAttrs);
-
-        // 3) If "SET" statement => read from input dataset
-    //    If "MERGE" => read from multiple input
-    //    If "INPUT" => read from DATALINES or external file 
-    //    Or if none => single iteration
-    // auto inDatasets = dsAttrs.setDatasets;
-    // for each row in inDatasets, or if none => single iteration
-    //while (nextRowAvailable(inDatasets, pdv)) {
-    //    // 3.1) fill PDV from the row
-    //    fillPDVFromInput(pdv, inDatasets);
-
-    //    // 3.2) set up retentions or variable defaults
-    //    pdv.resetNonRetainedExceptRetainedVars(dsAttrs.retainVars);
-
-    //    // 3.3) interpret each statement in the data step
-    //    for (auto& stmt : node->statements) {
-    //        executeDataStepStatement(stmt.get(), pdv, outDataset, dsAttrs);
-    //    }
-
-    //    // If user explicitly calls "output;" you might have set a flag => addRow to outDataset
-    //    // Or if there's an implied output, do it here
-    //}
-
-
-    // Keep track that we¡¯re in a DATA step
-    // In real SAS, we'd do multiple passes for each input row if there's a SET, 
-    // but here let's assume a single iteration for demonstration
-    // so we "process" node->statements once.
-
-    // Reset currentRow
-    env.currentRow.columns.clear();
-
-    std::vector<std::pair<std::string, bool>> inputVars;
-    std::vector<std::string> dataLines;
-
-    // 3) Execute each statement
-    bool shouldOutput = false;
-
-    for (auto& stmt : node->statements) {
-        if (auto inp = dynamic_cast<InputNode*>(stmt.get())) {
-            // store those variable names
-            for (auto& var : inp->variables) {
-                inputVars.push_back(var);
-            }
+    if (auto assign = dynamic_cast<AssignmentNode*>(stmt)) {
+        // Evaluate
+        Value val = evaluate(assign->expression.get());
+        int pdvIndex = pdv.findVarIndex(assign->varName);
+        if (pdvIndex < 0) {
+            // If not found, add new variable to PDV
+            PdvVar newVar;
+            newVar.name = assign->varName;
+            newVar.isNumeric = std::holds_alternative<double>(val);
+            pdv.addVariable(newVar);
+            pdvIndex = pdv.findVarIndex(assign->varName);
         }
-        else if (auto dl = dynamic_cast<DatalinesNode*>(stmt.get())) {
-            // store raw lines
-            for (auto& line : dl->lines) {
-                dataLines.push_back(line);
-            }
-        }
-        else if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
-            // Evaluate the right-hand side
-            Value val = evaluate(assign->expression.get());
-            // Set the variable
-            env.currentRow.columns[assign->varName] = val;
-        }
-        else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
-            // When we see 'output;', push currentRow into ds->rows
-            ds->addRow(env.currentRow);
-            // In real SAS, this often resets certain variables to missing, 
-            // but let's skip that for simplicity.
-            shouldOutput = true;
+        // Convert Value => Cell
+        if (std::holds_alternative<double>(val)) {
+            pdv.setValue(pdvIndex, std::get<double>(val));
         }
         else {
-            logLogger.warn("DATA step statement not implemented. Skipping.");
+            pdv.setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
+        }
+    }
+    else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt)) {
+        // Evaluate condition from PDV
+        Value condVal = evaluate(ifThen->condition.get());
+        double d = toNumber(condVal);
+        if (d != 0.0) {
+            // run thenStatements
+            for (auto& subStmt : ifThen->thenStatements) {
+                executeDataStepStatement(subStmt.get(), pdv, outDoc, doOutputThisRow);
+            }
+        }
+    }
+    else if (auto outStmt = dynamic_cast<OutputNode*>(stmt)) {
+        // Mark that we want to output this row
+        doOutputThisRow = true;
+    }
+    else if (auto dropStmt = dynamic_cast<DropNode*>(stmt)) {
+        for (auto& varName : dropStmt->variables) {
+            int idx = pdv.findVarIndex(varName);
+            if (idx >= 0) {
+                pdv.pdvVars.erase(pdv.pdvVars.begin() + idx);
+                pdv.pdvValues.erase(pdv.pdvValues.begin() + idx);
+            }
+        }
+    }
+    else if (auto keepStmt = dynamic_cast<KeepNode*>(stmt)) {
+        std::vector<PdvVar> newVars;
+        std::vector<Cell> newVals;
+        for (size_t i = 0; i < pdv.pdvVars.size(); i++) {
+            auto& varDef = pdv.pdvVars[i];
+            // If varDef.name is in keepStmt->variables, keep it
+            if (std::find(keepStmt->variables.begin(), keepStmt->variables.end(),
+                varDef.name) != keepStmt->variables.end())
+            {
+                newVars.push_back(varDef);
+                newVals.push_back(pdv.pdvValues[i]);
+            }
+        }
+        pdv.pdvVars = newVars;
+        pdv.pdvValues = newVals;
+    }
+    else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
+        for (auto& var : retainStmt->variables) {
+            pdv.setRetainFlag(var, true);
+        }
+    }
+    // else handle other statements: array, do loops, merges, etc.
+    else {
+        // fallback
+    }
+}
+
+
+void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
+{
+    // Step 1: sync new PDV columns to doc
+    syncPdvColumnsToSasDoc(pdv, doc);
+
+    // We'll increment doc->obs_count
+    int outRowIndex = doc->obs_count;
+    doc->obs_count++;
+    // Make sure doc->values is big enough
+    doc->values.resize(doc->var_count * doc->obs_count);
+
+    // For each variable in doc->var_names / doc->var_count
+    for (int c = 0; c < doc->var_count; c++) {
+        const std::string& varName = doc->var_names[c];
+        int pdvIndex = pdv.findVarIndex(varName);
+        if (pdvIndex >= 0) {
+            doc->values[outRowIndex * doc->var_count + c] = pdv.getValue(pdvIndex);
+        }
+        else {
+            // missing
+            if (doc->var_types[c] == READSTAT_TYPE_STRING) {
+                doc->values[outRowIndex * doc->var_count + c] = flyweight_string("");
+            }
+            else {
+                doc->values[outRowIndex * doc->var_count + c] = double(-INFINITY);
+            }
+        }
+    }
+}
+
+
+// Execute a DATA step
+void Interpreter::executeDataStep(DataStepNode* node) {
+    // 1) Create or get the output dataset (SasDoc or normal Dataset)
+    auto outDatasetPtr = env.getOrCreateDataset(node->outputDataSet);
+    // For full readstat integration, cast to SasDoc if you want:
+    auto outDoc = std::dynamic_pointer_cast<SasDoc>(outDatasetPtr);
+    if (!outDoc) {
+        // If it's not SasDoc, we can fallback or just use Dataset
+        outDoc = std::make_shared<SasDoc>();
+        outDoc->name = node->outputDataSet;
+        env.dataSets[node->outputDataSet] = outDoc;
+    }
+
+    // 2) Build a PDV
+    PDV pdv;
+
+    // We want to see if there's an input dataset
+    bool hasInputDataset = !node->inputDataSet.empty();
+
+    // We also want to gather any InputNode or DatalinesNode statements
+    std::vector<std::pair<std::string, bool>> inputVars; // (varName, isString)
+    std::vector<std::string> datalines;
+
+    // Also gather other data step statements (assignments, if-then, etc.)
+    // We can store them in a vector, or handle them inline. 
+    // For clarity, let's store them:
+    std::vector<ASTNode*> dataStepStmts;
+
+    // 3) Pre-scan node->statements to find InputNode, DatalinesNode, etc.
+    for (auto& stmtUniquePtr : node->statements) {
+        ASTNode* stmt = stmtUniquePtr.get();
+        if (auto inp = dynamic_cast<InputNode*>(stmt)) {
+            // We'll collect these variables
+            for (auto& varPair : inp->variables) {
+                inputVars.push_back(varPair);
+            }
+        }
+        else if (auto dl = dynamic_cast<DatalinesNode*>(stmt)) {
+            // Collect lines
+            for (auto& line : dl->lines) {
+                datalines.push_back(line);
+            }
+        }
+        else {
+            // It's not input or datalines, so store it in dataStepStmts
+            dataStepStmts.push_back(stmt);
         }
     }
 
-    // 4) If user never typed 'output;', we might want to output once anyway. 
-    // But in real SAS, you must call 'output;' or no record is written 
-    // (except if there's an implied output at the bottom).
-    // We'll do nothing here unless you want an implied output.
+    // We keep track if user calls OUTPUT in statements. We'll handle that row-by-row in the PDV approach
+    bool doOutputThisRow = false;
 
-        // After all statements are processed, if we have input variables + datalines,
-    // we create rows from them. In real SAS, each dataline gets read into
-    // the variables in order. For instance:
-    //   input name $ age;
-    //   datalines;
-    //   john 23
-    //   mary 30
-    //   ;
-    //
-    // We'll do a naive parser: each line => tokens => store in row.
+    bool hasOutputStatement = false;
+    for (auto stmt : dataStepStmts) {
+        if (dynamic_cast<OutputNode*>(stmt))
+        {
+            hasOutputStatement = true;
+            break;
+        }
+    }
 
-    if (!inputVars.empty() && !dataLines.empty()) {
-        for (auto& dlLine : dataLines) {
-            // split by whitespace (super naive)
-            std::istringstream iss(dlLine);
-            std::vector<std::string> fields;
-            std::string f;
-            while (iss >> f) {
-                fields.push_back(f);
+    //-------------------------------------------------------------------
+    // 4) If user specified an input dataset: "data out; set in; ..."
+    //-------------------------------------------------------------------
+    if (hasInputDataset) {
+        // Let's get that dataset (SasDoc)
+        auto inDocPtr = env.getOrCreateDataset(node->inputDataSet);
+        auto inDoc = std::dynamic_pointer_cast<SasDoc>(inDocPtr);
+        if (!inDoc) {
+            throw std::runtime_error(
+                "Input dataset '" + node->inputDataSet + "' not found or not a SasDoc."
+            );
+        }
+
+        // Initialize PDV from inDoc
+        pdv.initFromSasDoc(inDoc.get());
+
+        // We'll iterate over each row in inDoc
+        int rowCount = inDoc->obs_count;
+        for (int rowIndex = 0; rowIndex < rowCount; ++rowIndex) {
+            // (a) load row from inDoc->values => PDV
+            for (int col = 0; col < inDoc->var_count; ++col) {
+                Cell cellVal = inDoc->values[rowIndex * inDoc->var_count + col];
+                const std::string& varName = inDoc->var_names[col];
+                int pdvIndex = pdv.findVarIndex(varName);
+                if (pdvIndex >= 0) {
+                    pdv.setValue(pdvIndex, cellVal);
+                }
             }
 
-            Row row;
-            for (size_t i = 0; i < inputVars.size() && i < fields.size(); ++i) {
-                std::string& varName = inputVars[i].first;
-                std::string& val = fields[i];
-                // Suppose we check if varName ends with '$' => string
-                // else numeric
-                if (!varName.empty() && inputVars[i].second == true) {
-                    // store as string
-                    std::string realVarName = varName.substr(0, varName.size() - 1);
-                    row.columns[realVarName] = val;
+            // (b) execute the other statements for this row
+            //     e.g., assignments, if-then, drop, keep, etc.
+            doOutputThisRow = false; // reset for this iteration
+
+            for (auto stmt : dataStepStmts) {
+                // We'll do a helper method: executeDataStepStatement(stmt, pdv, outDoc, doOutputThisRow)
+                // That method will handle assignment, if-then, output, etc.
+                executeDataStepStatement(stmt, pdv, outDoc.get(), doOutputThisRow);
+            }
+
+            // (c) If doOutputThisRow==true, copy from PDV => outDoc
+            if (doOutputThisRow) {
+                appendPdvRowToSasDoc(pdv, outDoc.get());
+            }
+
+            // (d) resetNonRetained for next iteration
+            pdv.resetNonRetained();
+        }
+    }
+    else {
+        //-------------------------------------------------------------------
+        // 5) If there's NO input dataset (like "data out; input name $ age; datalines; ...; run;")
+        //    we handle the lines ourselves, row by row in PDV.
+        //-------------------------------------------------------------------
+        // First, let's define PDV variables from inputVars:
+        for (auto& varPair : inputVars) {
+            const std::string& varName = varPair.first;
+            bool isStringVar = varPair.second;
+            PdvVar vdef;
+            vdef.name = varName; // might be "NAME" or "NAME$" depending on parser
+            vdef.isNumeric = !isStringVar;
+            // if you need to strip trailing '$', do so
+            if (isStringVar && !vdef.name.empty() && vdef.name.back() == '$') {
+                vdef.name.pop_back();
+            }
+            pdv.addVariable(vdef);
+        }
+
+        // Now for each line in datalines => fill PDV => run statements => possibly output
+        for (auto& oneLine : datalines) {
+            // parse fields
+            std::vector<std::string> fields;
+            {
+                std::istringstream iss(oneLine);
+                std::string f;
+                while (iss >> f) {
+                    fields.push_back(f);
+                }
+            }
+
+            // load PDV variables from fields
+            // we assume inputVars.size() is the max # of fields
+            for (size_t i = 0; i < inputVars.size(); ++i) {
+                if (i < fields.size()) {
+                    const std::string& field = fields[i];
+                    // if numeric, convert
+                    int pdvIndex = pdv.findVarIndex(inputVars[i].first);
+                    if (pdvIndex < 0) continue; // shouldn't happen unless code mismatch
+
+                    if (inputVars[i].second) {
+                        // it's a string
+                        pdv.setValue(pdvIndex, flyweight_string(field));
+                    }
+                    else {
+                        // it's numeric
+                        try {
+                            double dval = std::stod(field);
+                            pdv.setValue(pdvIndex, dval);
+                        }
+                        catch (...) {
+                            pdv.setValue(pdvIndex, double(-INFINITY));
+                        }
+                    }
                 }
                 else {
-                    // store numeric
-                    try {
-                        double d = std::stod(val);
-                        row.columns[varName] = d;
-                    }
-                    catch (...) {
-                        row.columns[varName] = std::nan("");
+                    // If there's not enough fields, we might set missing
+                    int pdvIndex = pdv.findVarIndex(inputVars[i].first);
+                    if (pdvIndex >= 0) {
+                        if (inputVars[i].second) {
+                            pdv.setValue(pdvIndex, flyweight_string(""));
+                        }
+                        else {
+                            pdv.setValue(pdvIndex, double(-INFINITY));
+                        }
                     }
                 }
             }
-            ds->addRow(row);
-        }
-    }
 
-
-    // 5) Count observations & variables
-    // Variables can be gleaned from ds->columnOrder or from the columns in the first row
-    if (ds->rows.size() > 0) {
-        // If no columnOrder was set yet, let's populate it from the first row
-        if (ds->columnOrder.empty()) {
-            for (auto& colpair : ds->rows[0].columns) {
-                ds->columnOrder.push_back(colpair.first);
+            // run the other data step statements for this line
+            doOutputThisRow = false;
+            for (auto stmt : dataStepStmts) {
+                executeDataStepStatement(stmt, pdv, outDoc.get(), doOutputThisRow);
             }
-        }
-    }
-    size_t obsCount = ds->rows.size();
-    size_t varCount = ds->columnOrder.size();
 
-    // 6) Log the note
-    // For full SAS style
+            if (doOutputThisRow || !hasOutputStatement) {
+                appendPdvRowToSasDoc(pdv, outDoc.get());
+            }
+
+            pdv.resetNonRetained();
+        }
+
+        // (b) execute the other statements for this row
+//     e.g., assignments, if-then, drop, keep, etc.
+        doOutputThisRow = false; // reset for this iteration
+
+        for (auto stmt : dataStepStmts) {
+            // We'll do a helper method: executeDataStepStatement(stmt, pdv, outDoc, doOutputThisRow)
+            // That method will handle assignment, if-then, output, etc.
+            executeDataStepStatement(stmt, pdv, outDoc.get(), doOutputThisRow);
+        }
+
+        // (c) If doOutputThisRow==true, copy from PDV => outDoc
+        if (doOutputThisRow) {
+            appendPdvRowToSasDoc(pdv, outDoc.get());
+        }
+
+        // (d) resetNonRetained for next iteration
+        pdv.resetNonRetained();
+    }
+
+    // save
+    env.saveSas7bdat(outDoc->name);
+
+    // 6) Final logging
+    // outDoc->obs_count should be updated as we appended rows
+    int obsCount = outDoc->obs_count;
+    // var_count might also be known; if not we can glean from outDoc->var_names
+    int varCount = outDoc->var_count;
     logLogger.info("NOTE: The data set {} has {} observations and {} variables.",
-        ds->name, obsCount, varCount);
+        outDoc->name, obsCount, varCount);
     logLogger.info("NOTE: DATA statement used (Total process time):\n"
         "      real time           0.00 seconds\n"
         "      cpu time            0.00 seconds");
 }
 
 
-//void Interpreter::executeDataStep(DataStepNode *node) {
-//    logLogger.info("Executing DATA step: data {}; set {};", node->outputDataSet, node->inputDataSet);
-//
-//    // Resolve output dataset name
-//    std::string outputLibref, outputDataset;
-//    size_t dotPos = node->outputDataSet.find('.');
-//    if (dotPos != std::string::npos) {
-//        outputLibref = node->outputDataSet.substr(0, dotPos);
-//        outputDataset = node->outputDataSet.substr(dotPos + 1);
-//    }
-//    else {
-//        outputDataset = node->outputDataSet;
-//    }
-//
-//    // Resolve input dataset name
-//    std::string inputLibref, inputDataset;
-//    dotPos = node->inputDataSet.find('.');
-//    if (dotPos != std::string::npos) {
-//        inputLibref = node->inputDataSet.substr(0, dotPos);
-//        inputDataset = node->inputDataSet.substr(dotPos + 1);
-//    }
-//    else {
-//        inputDataset = node->inputDataSet;
-//    }
-//
-//    // Check if input dataset exists
-//    std::shared_ptr<Dataset> input = nullptr;
-//    try {
-//        input = env.getOrCreateDataset(inputLibref, inputDataset);
-//    }
-//    catch (const std::runtime_error &e) {
-//        logLogger.error(e.what());
-//        return;
-//    }
-//
-//    // Create or get the output dataset
-//    std::shared_ptr<Dataset> output;
-//    try {
-//        output = env.getOrCreateDataset(outputLibref, outputDataset);
-//        output->name = node->outputDataSet;
-//    }
-//    catch (const std::runtime_error &e) {
-//        logLogger.error(e.what());
-//        return;
-//    }
-//
-//    // Log dataset sizes
-//    logLogger.info("Input dataset '{}' has {} observations.", node->inputDataSet, input->rows.size());
-//    logLogger.info("Output dataset '{}' will store results.", node->outputDataSet);
-//
-//    // Variables to control variable retention
-//    std::vector<std::string> dropVars;
-//    std::vector<std::string> keepVars;
-//    std::vector<std::string> retainVars;
-//
-//    bool hasDrop = false;
-//    bool hasKeep = false;
-//    bool hasRetain = false;
-//
-//    // Check if a MERGE statement exists in the data step
-//    bool hasMerge = false;
-//    MergeStatementNode* mergeNode = nullptr;
-//    for (const auto& stmt : node->statements) {
-//        if (auto m = dynamic_cast<MergeStatementNode*>(stmt.get())) {
-//            hasMerge = true;
-//            mergeNode = m;
-//            break;
-//        }
-//    }
-//
-//    if (hasMerge && mergeNode) {
-//        // Handle MERGE logic
-//        executeMerge(mergeNode);
-//        // Remove MERGE statement from the data step to avoid re-processing
-//        // Implement this as per your data structure
-//    }
-//
-//    // Execute each row in the input dataset
-//    for (const auto &row : input->rows) {
-//        env.currentRow = row; // Set the current row for processing
-//
-//        // Apply RETAIN variables: retain their values across iterations
-//        if (hasRetain) {
-//            for (const auto& var : retainVars) {
-//                if (env.variables.find(var) != env.variables.end()) {
-//                    env.currentRow.columns[var] = env.variables[var];
-//                }
-//            }
-//        }
-//
-//        // Flag to determine if the row should be output
-//        bool shouldOutput = false;
-//
-//        // Temporary variables to track DROP/KEEP
-//        dropVars.clear();
-//        keepVars.clear();
-//        retainVars.clear();
-//        hasDrop = false;
-//        hasKeep = false;
-//        hasRetain = false;
-//
-//        // Execute each statement in the DATA step
-//        for (const auto &stmt : node->statements) {
-//            if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
-//                executeAssignment(assign);
-//            }
-//            else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
-//                executeIfThen(ifThen);
-//            }
-//            else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
-//                executeOutput(out);
-//                shouldOutput = true;
-//            }
-//            else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
-//                executeDrop(drop);
-//                hasDrop = true;
-//            }
-//            else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
-//                executeKeep(keep);
-//                hasKeep = true;
-//            }
-//            else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
-//                executeRetain(retain);
-//                hasRetain = true;
-//            }
-//            else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
-//                executeArray(array);
-//            }
-//            else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
-//                executeDo(doNode);
-//            }
-//            else {
-//                // Handle other DATA step statements if needed
-//                throw std::runtime_error("Unsupported statement in DATA step.");
-//            }
-//        }
-//
-//        // Apply DROP and KEEP rules
-//        if (hasDrop && hasKeep) {
-//            // In SAS, if both DROP and KEEP are specified, KEEP takes precedence
-//            // Keep only the variables specified in KEEP
-//            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
-//                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
-//                    it = env.currentRow.columns.erase(it);
-//                }
-//                else {
-//                    ++it;
-//                }
-//            }
-//        }
-//        else if (hasKeep) {
-//            // Keep only the variables specified in KEEP
-//            for (auto it = env.currentRow.columns.begin(); it != env.currentRow.columns.end(); ) {
-//                if (std::find(keepVars.begin(), keepVars.end(), it->first) == keepVars.end()) {
-//                    it = env.currentRow.columns.erase(it);
-//                }
-//                else {
-//                    ++it;
-//                }
-//            }
-//        }
-//        else if (hasDrop) {
-//            // Drop the variables specified in DROP
-//            for (const auto& var : dropVars) {
-//                env.currentRow.columns.erase(var);
-//            }
-//        }
-//
-//        // Apply RETAIN variables: store their values for the next iteration
-//        if (hasRetain) {
-//            for (const auto& var : retainVars) {
-//                if (env.currentRow.columns.find(var) != env.currentRow.columns.end()) {
-//                    env.variables[var] = env.currentRow.columns[var];
-//                }
-//                else {
-//                    // If variable not present, retain existing value
-//                    if (env.variables.find(var) != env.variables.end()) {
-//                        env.currentRow.columns[var] = env.variables[var];
-//                    }
-//                }
-//            }
-//        }
-//
-//        // If 'OUTPUT' was called, add the current row to the output dataset
-//        if (shouldOutput) {
-//            output->addRow(env.currentRow);
-//            logLogger.info("Row outputted to '{}'.", node->outputDataSet);
-//        }
-//    }
-//
-//    logLogger.info("DATA step '{}' executed successfully. Output dataset has {} observations.",
-//                   node->outputDataSet, output->rows.size());
-//
-//    // For demonstration, print the output dataset
-//    lstLogger.info("SAS Results (Dataset: {}):", node->outputDataSet);
-//    if (!env.title.empty()) {
-//        lstLogger.info("Title: {}", env.title);
-//    }
-// 
-//    // Print column headers
-//    std::string header;
-//    for (size_t i = 0; i < output->columnOrder.size(); ++i) {
-//        header += output->columnOrder[i];
-//        if (i < output->columnOrder.size() - 1) header += "\t";
-//    }
-//    lstLogger.info("{}", header);
-//
-//    // Print rows
-//    int obs = 1;
-//    for (const auto &row : output->rows) {
-//        std::string rowStr = std::to_string(obs++) + "\t";
-//        for (size_t i = 0; i < output->columnOrder.size(); ++i) {
-//            const std::string &col = output->columnOrder[i];
-//            auto it = row.columns.find(col);
-//            if (it != row.columns.end()) {
-//                rowStr += toString(it->second);
-//            }
-//            else {
-//                rowStr += ".";
-//            }
-//            if (i < output->columnOrder.size() - 1) rowStr += "\t";
-//        }
-//        lstLogger.info("{}", rowStr);
-//    }
-//}
+void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
+{
+    // For each PdvVar in pdv, see if doc->var_names already has it
+    for (size_t i = 0; i < pdv.pdvVars.size(); i++) {
+        const std::string& pdvVarName = pdv.pdvVars[i].name;
+        // search doc->var_names
+        auto it = std::find(doc->var_names.begin(), doc->var_names.end(), pdvVarName);
+        if (it == doc->var_names.end()) {
+            // We have a new column
+            doc->var_names.push_back(pdvVarName);
+            // guess var_types: if isNumeric => READSTAT_TYPE_DOUBLE else READSTAT_TYPE_STRING
+            if (pdv.pdvVars[i].isNumeric) {
+                doc->var_types.push_back(READSTAT_TYPE_DOUBLE);
+            }
+            else {
+                doc->var_types.push_back(READSTAT_TYPE_STRING);
+            }
+
+            // Optionally define var_labels, var_formats, var_length etc. For now we do minimal:
+            doc->var_labels.push_back("");
+            doc->var_formats.push_back("");
+            doc->var_length.push_back(pdv.pdvVars[i].length <= 0 ? 8 : pdv.pdvVars[i].length);
+            doc->var_display_length.push_back(8); // arbitrary
+            doc->var_decimals.push_back(0);
+
+            // Increase var_count
+            doc->var_count = (int)doc->var_names.size();
+
+            // Now we must expand doc->values to accommodate this new column.
+            // For each existing row in doc->obs_count, we insert a missing placeholder
+            // typically -INFINITY for numeric or "" for string
+            int oldRowCount = doc->obs_count;
+            if (oldRowCount > 0) {
+                // The old doc->values size was var_count-1 * oldRowCount, we just incremented var_count
+                // So we re-allocate doc->values to the new size
+                // we must do it carefully: we had old size = (var_count-1) * oldRowCount
+                // new size = var_count * oldRowCount
+                // We'll copy from old array to new array
+                // but a simpler approach is to do it row by row
+                int newVarCount = doc->var_count; // after increment
+                std::vector<Cell> oldValues = doc->values;
+                doc->values.clear();
+                doc->values.resize(newVarCount * oldRowCount);
+
+                // row by row copy
+                for (int r = 0; r < oldRowCount; r++) {
+                    // copy old row
+                    for (int c = 0; c < newVarCount - 1; c++) {
+                        // the old column c in that row used to be old row index = r*(var_count-1) + c
+                        doc->values[r * newVarCount + c] = oldValues[r * (newVarCount - 1) + c];
+                    }
+                    // fill the new column with missing
+                    if (pdv.pdvVars[i].isNumeric) {
+                        doc->values[r * newVarCount + (newVarCount - 1)] = double(-INFINITY);
+                    }
+                    else {
+                        doc->values[r * newVarCount + (newVarCount - 1)] = flyweight_string("");
+                    }
+                }
+            }
+            else {
+                // If there are no existing rows, nothing to do except ensure doc->values is correct size
+                // doc->obs_count=0 => doc->values is 0 sized anyway
+            }
+        }
+    }
+}
+
 
 // Execute an assignment statement
 void Interpreter::executeAssignment(AssignmentNode *node) {
@@ -855,7 +866,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     logLogger.info("Executing PROC SORT");
 
     // Retrieve the input dataset
-    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
         throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC SORT.");
     }
@@ -865,7 +876,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
         std::string tempDSName = "TEMP_SORT_FILTERED";
-        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        auto tempDS = env.getOrCreateDataset(tempDSName);
         tempDS->rows.clear();
 
         for (const auto& row : inputDS->rows) {
@@ -902,7 +913,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     Dataset* sortedDS = filteredDS;
     if (node->nodupkey) {
         std::string tempDSName = "TEMP_SORT_NODUPKEY";
-        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        auto tempDS = env.getOrCreateDataset(tempDSName);
         tempDS->rows.clear();
 
         std::unordered_set<std::string> seenKeys;
@@ -969,7 +980,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
     // Determine the output dataset
     std::string outputDSName = node->outputDataSet.empty() ? node->inputDataSet : node->outputDataSet;
-    Dataset* outputDS = env.getOrCreateDataset(outputDSName, outputDSName).get();
+    Dataset* outputDS = env.getOrCreateDataset(outputDSName).get();
     if (outputDSName != sortedDS->name) {
         // Copy sortedDS to outputDS
         outputDS->rows = sortedDS->rows;
@@ -989,7 +1000,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     logLogger.info("Executing PROC MEANS");
 
     // Retrieve the input dataset
-    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
         throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC MEANS.");
     }
@@ -999,7 +1010,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
         std::string tempDSName = "TEMP_MEANS_FILTERED";
-        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        auto tempDS = env.getOrCreateDataset(tempDSName);
         tempDS->rows.clear();
 
         for (const auto& row : inputDS->rows) {
@@ -1090,7 +1101,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     // Prepare output dataset if specified
     Dataset* outputDS = nullptr;
     if (!node->outputDataSet.empty()) {
-        outputDS = env.getOrCreateDataset(node->outputDataSet, node->outputDataSet).get();
+        outputDS = env.getOrCreateDataset(node->outputDataSet).get();
         outputDS->rows.clear();
     }
 
@@ -1486,7 +1497,7 @@ void Interpreter::executeMerge(MergeStatementNode* node) {
     // Ensure all datasets exist
     std::vector<Dataset*> mergeDatasets;
     for (const auto& dsName : node->datasets) {
-        Dataset* ds = env.getOrCreateDataset(dsName, dsName).get();
+        Dataset* ds = env.getOrCreateDataset(dsName).get();
         if (!ds) {
             throw std::runtime_error("Dataset not found for MERGE: " + dsName);
         }
@@ -1711,7 +1722,7 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
     logLogger.info("Executing PROC FREQ");
 
     // Retrieve the input dataset
-    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
         throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC FREQ.");
     }
@@ -1721,7 +1732,7 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
         std::string tempDSName = "TEMP_FREQ_FILTERED";
-        auto tempDS = env.getOrCreateDataset(tempDSName, tempDSName);
+        auto tempDS = env.getOrCreateDataset(tempDSName);
         tempDS->rows.clear();
 
         for (const auto& row : inputDS->rows) {
@@ -1874,7 +1885,7 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
 
 void Interpreter::executeProcPrint(ProcPrintNode* node) {
     // Retrieve the input dataset
-    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet, node->inputDataSet).get();
+    Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
         throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC PRINT.");
     }
@@ -2004,7 +2015,7 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
 
     // Create a new dataset to store the results
     std::string resultTableName = "SQL_RESULT";
-    Dataset* resultDS = env.getOrCreateDataset(resultTableName, resultTableName).get();
+    Dataset* resultDS = env.getOrCreateDataset(resultTableName).get();
     resultDS->rows.clear();
 
     // Determine source tables
@@ -2018,7 +2029,7 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
     }
 
     std::string sourceTableName = selectStmt->fromTables[0];
-    Dataset* sourceDS = env.getOrCreateDataset(sourceTableName, sourceTableName).get();
+    Dataset* sourceDS = env.getOrCreateDataset(sourceTableName).get();
     if (!sourceDS) {
         throw std::runtime_error("Source table '" + sourceTableName + "' not found for SELECT statement.");
     }
@@ -2138,7 +2149,7 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
 void Interpreter::executeCreateTable(const CreateTableStatementNode* createStmt) {
     // Create a new dataset with the specified columns
     std::string newTableName = createStmt->tableName;
-    Dataset* newDS = env.getOrCreateDataset(newTableName, newTableName).get();
+    Dataset* newDS = env.getOrCreateDataset(newTableName).get();
     newDS->rows.clear();
 
     // For simplicity, initialize columns without specific data types

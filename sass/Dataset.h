@@ -33,6 +33,7 @@ namespace sass {
     // Represents a dataset containing multiple rows
     class Dataset {
     public:
+        virtual ~Dataset() = default;  // This makes Dataset polymorphic
         std::string name;
         std::vector<Row> rows;
 
@@ -43,14 +44,7 @@ namespace sass {
         std::vector<std::string> columnOrder;
 
         // Method to add a row to the dataset
-        void addRow(const Row& row) {
-            // Ensure columns are consistent with columnOrder
-            // If columnOrder is empty, initialize it with the first row's columns
-            if (columnOrder.empty()) {
-                for (const auto& [col, _] : row.columns) {
-                    columnOrder.push_back(col);
-                }
-            }
+        virtual void addRow(const Row& row) {
             rows.push_back(row);
         }
     };

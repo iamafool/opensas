@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <stack>
+#include "PDV.h"
 
 namespace sass {
     class Interpreter {
@@ -19,6 +20,10 @@ namespace sass {
         void executeProgram(const std::unique_ptr<ProgramNode>& program);
         spdlog::logger& logLogger;
         void execute(ASTNode* node);
+
+        void executeDataStepStatement(ASTNode* stmt, PDV& pdv, SasDoc* outDoc, bool& doOutputThisRow);
+
+        void appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc);
 
         void handleReplInput(const std::string& input);
 
@@ -36,6 +41,7 @@ namespace sass {
         std::stack<std::pair<DoLoopNode*, size_t>> loopStack;
 
         void executeDataStep(DataStepNode* node);
+        void syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc);
         void executeAssignment(AssignmentNode* node);
         void executeIfThen(IfThenNode* node);
         void executeIfElse(IfElseIfNode* node); // Updated method

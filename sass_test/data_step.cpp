@@ -3,8 +3,14 @@
 #include "fixture.h"
 #include "Lexer.h"
 #include "Parser.h"
+#include <filesystem>
+#include <boost/flyweight.hpp>
 
+using namespace std;
 using namespace sass;
+namespace fs = std::filesystem;
+
+using flyweight_string = boost::flyweight<std::string>;
 
 // Test case for executing a simple DATA step and PROC PRINT
 TEST_F(SassTest, DataStepOutput1) {
@@ -50,18 +56,26 @@ TEST_F(SassTest, DataStepOutput1) {
 
     interpreter->execute(parseResult.node.get());
 
-    // Verify that the dataset 'test' exists with correct values
-    ASSERT_TRUE(env->dataSets.find("WORK.a") != env->dataSets.end());
-    Dataset* testDataset = env->dataSets["WORK.a"].get();
+    // Verify that the dataset 'a' exists with correct values
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "a.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
-    ASSERT_EQ(testDataset->rows.size(), 1);
-    EXPECT_EQ(std::get<double>(testDataset->rows[0].columns.at("a")), 10.0);
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 1);
+    EXPECT_EQ(sasdoc1.obs_count, 1);
+
+    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 10.0);
 }
 
 TEST_F(SassTest, DataStepInput1) {
     std::string code = R"(
         data employees;
-          input name age;
+          input name $ age;
           datalines;
 john 23
 mary 30
@@ -82,10 +96,21 @@ mary 30
     interpreter->execute(parseResult.node.get());
 
     // 4) Check dataset WORK.employees => 2 obs, 2 vars
-    auto it = env->dataSets.find("WORK.employees");
-    ASSERT_NE(it, env->dataSets.end());
-    auto ds = it->second;
-    ASSERT_EQ(ds->rows.size(), 2u);
-    // row[0] => name="john", age=23
-    // row[1] => name="mary", age=30
+    // Verify that the dataset 'a' exists with correct values
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "employees.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 2);
+    EXPECT_EQ(sasdoc1.obs_count, 2);
+
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "john");
+    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 23.0);
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "mary");
+    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 30.0);
 }

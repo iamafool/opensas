@@ -23,5 +23,16 @@ static std::string trim(const std::string& s) {
     return s.substr(start, end - start + 1);
 }
 
+static std::string getLibname(const std::string& dsName)
+{
+    std::string lib("WORK");
+    size_t dotPos = dsName.find('.');
+    if (dotPos != std::string::npos) {
+        lib = dsName.substr(0, dotPos);
+    }
+    return lib;
+}
+
+
 #endif // !UTILITY_H
 
