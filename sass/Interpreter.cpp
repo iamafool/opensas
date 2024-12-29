@@ -13,6 +13,7 @@
 #include "Lexer.h"
 #include "Parser.h"
 #include "PDV.h"
+#include "StepTimer.h"
 
 using namespace std;
 
@@ -196,6 +197,8 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
 
 // Execute a DATA step
 void Interpreter::executeDataStep(DataStepNode* node) {
+    ScopedStepTimer timer("DATA statement", logLogger);
+
     // 1) Create or get the output dataset (SasDoc or normal Dataset)
     auto outDatasetPtr = env.getOrCreateDataset(node->outputDataSet);
     // For full readstat integration, cast to SasDoc if you want:
@@ -414,9 +417,6 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     int varCount = outDoc->var_count;
     logLogger.info("NOTE: The data set {} has {} observations and {} variables.",
         outDoc->name, obsCount, varCount);
-    logLogger.info("NOTE: DATA statement used (Total process time):\n"
-        "      real time           0.00 seconds\n"
-        "      cpu time            0.00 seconds");
 }
 
 
@@ -1881,6 +1881,8 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
 }
 
 void Interpreter::executeProcPrint(ProcPrintNode* node) {
+    ScopedStepTimer timer("PROCEDURE PRINT", logLogger);
+
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
@@ -1980,9 +1982,6 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
     }
 
     logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->rows.size(), inputDS->name);
-    logLogger.info("NOTE: PROCEDURE PRINT used(Total process time) :");
-    logLogger.info("      real time           0.00 seconds");
-    logLogger.info("      cpu time            0.00 seconds");
 }
 
 void Interpreter::executeProcSQL(ProcSQLNode* node) {

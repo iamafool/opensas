@@ -47,7 +47,7 @@ add_library (libsass
     readstat/readstat_value.c
     readstat/readstat_variable.c
     readstat/readstat_writer.c 
- "PDV.cpp" "Library.h" "Library.cpp" "TempUtils.h" "TempUtils.cpp")
+ "PDV.cpp" "Library.h" "Library.cpp" "TempUtils.h" "TempUtils.cpp" "StepTimer.h" "StepTimer.cpp")
 
 # Add source to this project's executable.
 add_executable (sass "sass.cpp" "sass.h" "Repl.h" "Repl.cpp")
