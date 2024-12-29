@@ -536,18 +536,15 @@ void Interpreter::executeOptions(OptionsNode* node) {
 
 // Execute a LIBNAME statement
 void Interpreter::executeLibname(LibnameNode* node) {
-    env.setLibref(node->libref, node->path);
-    logLogger.info("Libname assigned: {} = '{}'", node->libref, node->path);
-
-    // Load multiple datasets if required
-    // For demonstration, let's load 'in.csv' as 'mylib.in'
-    std::string csvPath = node->path + "\\" + "in.csv"; // Adjust path separator as needed
-    try {
-        env.loadDatasetFromCSV(node->libref, "in", csvPath);
-        logLogger.info("Loaded dataset '{}' from '{}'", node->libref + ".in", csvPath);
+    int rc = env.defineLibrary(node->libref, node->path, node->accessMode);
+    if (rc == 0)
+    {
+        logLogger.info("NOTE: Libref {} was successfully assigned as follows:", node->libref);
+        logLogger.info("      Engine:        V9");
+        logLogger.info("      Physical Name : {}", node->path);
     }
-    catch (const std::runtime_error &e) {
-        logLogger.error("Failed to load dataset: {}", e.what());
+    else {
+        logLogger.info("NOTE: Library {} does not exist.", node->libref);
     }
 }
 

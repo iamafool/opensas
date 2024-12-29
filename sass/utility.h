@@ -7,6 +7,32 @@
 #include <iostream>
 #include <sstream>
 
+// In-place uppercase
+static void to_upper_inplace(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(),
+        [](unsigned char c) { return static_cast<unsigned char>(std::toupper(c)); }
+    );
+}
+
+// In-place lowercase
+static void to_lower_inplace(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(),
+        [](unsigned char c) { return static_cast<unsigned char>(std::tolower(c)); }
+    );
+}
+
+// Return-by-value uppercase
+static std::string to_upper(std::string str) {
+    to_upper_inplace(str);
+    return str;
+}
+
+// Return-by-value lowercase
+static std::string to_lower(std::string str) {
+    to_lower_inplace(str);
+    return str;
+}
+
 static std::string trim(const std::string& s) {
     if (s.empty()) return s;
     size_t start = 0;

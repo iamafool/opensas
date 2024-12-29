@@ -33,7 +33,6 @@ namespace sass {
 
         // Global settings
         std::unordered_map<std::string, std::string> options;
-        std::unordered_map<std::string, std::string> librefs;
         std::string title;
 
         // Symbol table for variables (could be nested for scopes if needed)
@@ -53,23 +52,6 @@ namespace sass {
 
         // Retrieve or create a dataset
         std::shared_ptr<Dataset> getOrCreateDataset(const std::string& datasetName);
-
-        // Resolve libref and dataset name to a full dataset name
-        std::string resolveLibref(const std::string& libref, const std::string& datasetName) const {
-            if (!libref.empty()) {
-                auto it = librefs.find(libref);
-                if (it != librefs.end()) {
-                    return libref + "." + datasetName;
-                }
-                else {
-                    throw std::runtime_error("Undefined libref: " + libref);
-                }
-            }
-            else {
-                // Default library (e.g., WORK)
-                return "WORK." + datasetName;
-            }
-        }
 
         // Set a global option
         void setOption(const std::string& option, const std::string& value) {
@@ -95,11 +77,6 @@ namespace sass {
 
         void setVariable(const std::string& varName, const Value& val) {
             variables[varName] = val;
-        }
-
-        // Set a libref
-        void setLibref(const std::string& libref, const std::string& path) {
-            librefs[libref] = path;
         }
 
         // Set a title
@@ -173,7 +150,7 @@ namespace sass {
         }
 
         // The existing method for LIBNAME statement:
-        void defineLibrary(const std::string& libref, const std::string& path, LibraryAccess access);
+        int defineLibrary(const std::string& libref, const std::string& path, LibraryAccess access);
 
         // Retrieve a library pointer
         std::shared_ptr<Library> getLibrary(const std::string& libref);

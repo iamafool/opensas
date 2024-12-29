@@ -244,7 +244,7 @@ std::unique_ptr<ASTNode> Parser::parseLibname() {
     auto node = std::make_unique<LibnameNode>();
     consume(TokenType::KEYWORD_LIBNAME, "Expected 'libname'");
 
-    node->libref = consume(TokenType::IDENTIFIER, "Expected libref").text;
+    node->libref = to_upper(consume(TokenType::IDENTIFIER, "Expected libref").text);
     // Optionally, there could be more options or syntax here
 
     // Expect the path, which is typically a string

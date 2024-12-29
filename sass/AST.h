@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <Library.h>
 
 namespace sass {
     // Base class for all AST nodes
@@ -96,6 +97,7 @@ namespace sass {
     public:
         std::string libref;
         std::string path;
+        LibraryAccess accessMode;
     };
 
     // Represents a TITLE statement: title 'Your Title';

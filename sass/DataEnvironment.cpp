@@ -18,23 +18,27 @@ namespace sass {
         // define a library named "WORK" with read/write access
         defineLibrary("WORK", workFolder, LibraryAccess::READWRITE);
         workCreated = true;
-        std::cout << "[DataEnvironment] WORK library created at: " << workFolder << std::endl;
     }
 
     DataEnvironment::~DataEnvironment() {
         // If we created a WORK library, remove its folder
         // after the SAS interpreter closes
         if (workCreated) {
-            std::cout << "[DataEnvironment] Removing WORK library folder: " << workFolder << std::endl;
             removeDirectoryRecursively(workFolder);
         }
     }
 
 
-    void DataEnvironment::defineLibrary(const std::string& libref, const std::string& path, LibraryAccess access) {
+    int DataEnvironment::defineLibrary(const std::string& libref, const std::string& path, LibraryAccess access) {
         // create or update library
-        auto lib = std::make_shared<Library>(libref, path, access);
-        libraries[libref] = lib;
+
+        if (fs::exists(path))
+        {
+            auto lib = std::make_shared<Library>(libref, path, access);
+            libraries[libref] = lib;
+            return 0;
+        }
+        return 1;
     }
 
     std::shared_ptr<Library> DataEnvironment::getLibrary(const std::string& libref) {
