@@ -212,12 +212,14 @@ namespace sass {
 		if (right9 == ".sas7bdat")
 		{
 			readstat_set_metadata_handler(parser, &handle_metadata);
-			error = readstat_parse_sas7bdat(parser, filename.c_str(), data01);
+			wstring temp{ filename.begin(), filename.end() };
+			error = readstat_parse_sas7bdat(parser, temp.c_str(), data01);
 		}
 		else if (right4 == ".xpt")
 		{
 			readstat_set_metadata_handler(parser, &handle_metadata_xpt);
-			error = readstat_parse_xport(parser, filename.c_str(), data01);
+			wstring temp{ filename.begin(), filename.end() };
+			error = readstat_parse_xport(parser, temp.c_str(), data01);
 		}
 
 		if (error != READSTAT_OK)

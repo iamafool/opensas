@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
-#include <Library.h>
+#include "Library.h"
 
 namespace sass {
     // Base class for all AST nodes

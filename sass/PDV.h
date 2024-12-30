@@ -12,7 +12,7 @@ namespace sass {
     // Define a variant type that can hold either a flyweight string or a double
     using Cell = std::variant<flyweight_string, double>;
 
-    // Represents one variable¡¯s metadata for the PDV
+    // Represents one variable's metadata for the PDV
     struct PdvVar {
         std::string name;      // e.g. "AGE", "NAME", etc.
         bool isNumeric;        // true => numeric, false => character
@@ -27,7 +27,7 @@ namespace sass {
             : isNumeric(false), length(0), decimals(0), retained(false) {}
     };
 
-    // The PDV holds an array of PdvVar plus the current row¡¯s values
+    // The PDV holds an array of PdvVar plus the current row's values
 // for a single iteration.
     class PDV {
     public:
