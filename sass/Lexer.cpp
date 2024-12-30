@@ -335,6 +335,12 @@ namespace sass {
 				return stringLiteral();
 			}
 
+			if (current == '.') {
+				pos++;
+				col++;
+				return Token{ TokenType::DOT, ".", line, col - 1 };
+			}
+
 			// Handle numbers
 			if (isdigit(current) || (current == '.' && pos + 1 < input.size() && isdigit(input[pos + 1]))) {
 				std::string num;

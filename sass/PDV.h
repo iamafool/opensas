@@ -36,7 +36,7 @@ namespace sass {
         std::vector<PdvVar> pdvVars;
 
         // Current row values: same size as pdvVars
-        // We store them as `Cell` (your flyweight_string or double).
+        // We store them as 'Cell' (your flyweight_string or double).
         // If a variable is numeric => we interpret the variant as double
         // If char => interpret as flyweight_string
         std::vector<Cell> pdvValues;

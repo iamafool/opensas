@@ -206,15 +206,15 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     if (!outDoc) {
         // If it's not SasDoc, we can fallback or just use Dataset
         outDoc = std::make_shared<SasDoc>();
-        outDoc->name = node->outputDataSet;
-        env.dataSets[node->outputDataSet] = outDoc;
+        outDoc->name = node->outputDataSet.dataName;
+        // env.dataSets[node->outputDataSet] = outDoc;
     }
 
     // 2) Build a PDV
     PDV pdv;
 
     // We want to see if there's an input dataset
-    bool hasInputDataset = !node->inputDataSet.empty();
+    bool hasInputDataset = !node->inputDataSet.dataName.empty();
 
     // We also want to gather any InputNode or DatalinesNode statements
     std::vector<std::pair<std::string, bool>> inputVars; // (varName, isString)
@@ -267,7 +267,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         auto inDoc = std::dynamic_pointer_cast<SasDoc>(inDocPtr);
         if (!inDoc) {
             throw std::runtime_error(
-                "Input dataset '" + node->inputDataSet + "' not found or not a SasDoc."
+                "Input dataset '" + node->inputDataSet.getFullDsName() + "' not found or not a SasDoc."
             );
         }
 
@@ -865,15 +865,17 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
-        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC SORT.");
+        throw std::runtime_error("Input dataset '" + node->inputDataSet.getFullDsName() + "' not found for PROC SORT.");
     }
 
     // Apply WHERE condition if specified
     Dataset* filteredDS = inputDS;
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
-        std::string tempDSName = "TEMP_SORT_FILTERED";
-        auto tempDS = env.getOrCreateDataset(tempDSName);
+        DatasetRefNode dsNode;
+        dsNode.dataName = "TEMP_SORT_FILTERED";
+
+        auto tempDS = env.getOrCreateDataset(dsNode);
         tempDS->rows.clear();
 
         for (const auto& row : inputDS->rows) {
@@ -909,8 +911,9 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     // Handle NODUPKEY option
     Dataset* sortedDS = filteredDS;
     if (node->nodupkey) {
-        std::string tempDSName = "TEMP_SORT_NODUPKEY";
-        auto tempDS = env.getOrCreateDataset(tempDSName);
+        DatasetRefNode dsNode;
+        dsNode.dataName = "TEMP_SORT_NODUPKEY";
+        auto tempDS = env.getOrCreateDataset(dsNode);
         tempDS->rows.clear();
 
         std::unordered_set<std::string> seenKeys;
@@ -976,12 +979,12 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     }
 
     // Determine the output dataset
-    std::string outputDSName = node->outputDataSet.empty() ? node->inputDataSet : node->outputDataSet;
-    Dataset* outputDS = env.getOrCreateDataset(outputDSName).get();
-    if (outputDSName != sortedDS->name) {
+    DatasetRefNode dsNode = node->outputDataSet.dataName.empty() ? node->inputDataSet : node->outputDataSet;
+    Dataset* outputDS = env.getOrCreateDataset(dsNode).get();
+    if (dsNode.dataName != sortedDS->name) {
         // Copy sortedDS to outputDS
         outputDS->rows = sortedDS->rows;
-        logLogger.info("Sorted data copied to output dataset '{}'.", outputDSName);
+        logLogger.info("Sorted data copied to output dataset '{}'.", dsNode.getFullDsName());
     }
     else {
         // Overwrite the input dataset
@@ -990,7 +993,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     }
 
     logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
-        outputDSName, outputDS->rows.size());
+        dsNode.getFullDsName(), outputDS->rows.size());
 }
 
 void Interpreter::executeProcMeans(ProcMeansNode* node) {
@@ -999,15 +1002,16 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
-        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC MEANS.");
+        throw std::runtime_error("Input dataset '" + node->inputDataSet.getFullDsName() + "' not found for PROC MEANS.");
     }
 
     // Apply WHERE condition if specified
     Dataset* filteredDS = inputDS;
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
-        std::string tempDSName = "TEMP_MEANS_FILTERED";
-        auto tempDS = env.getOrCreateDataset(tempDSName);
+        DatasetRefNode dsNode;
+        dsNode.dataName = "TEMP_MEANS_FILTERED";
+        auto tempDS = env.getOrCreateDataset(dsNode);
         tempDS->rows.clear();
 
         for (const auto& row : inputDS->rows) {
@@ -1097,7 +1101,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
 
     // Prepare output dataset if specified
     Dataset* outputDS = nullptr;
-    if (!node->outputDataSet.empty()) {
+    if (!node->outputDataSet.dataName.empty()) {
         outputDS = env.getOrCreateDataset(node->outputDataSet).get();
         outputDS->rows.clear();
     }
@@ -1166,7 +1170,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     // If OUTPUT dataset is specified, log its creation
     if (outputDS) {
         logLogger.info("PROC MEANS output dataset '{}' created with {} observations.",
-            node->outputDataSet, outputDS->rows.size());
+            node->outputDataSet.getFullDsName(), outputDS->rows.size());
     }
 
     logLogger.info("PROC MEANS executed successfully.");
@@ -1486,17 +1490,12 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
 }
 
 void Interpreter::executeMerge(MergeStatementNode* node) {
-    logLogger.info("Executing MERGE statement with datasets:");
-    for (const auto& ds : node->datasets) {
-        logLogger.info(" - {}", ds);
-    }
-
     // Ensure all datasets exist
     std::vector<Dataset*> mergeDatasets;
-    for (const auto& dsName : node->datasets) {
-        Dataset* ds = env.getOrCreateDataset(dsName).get();
+    for (auto& dsNode : node->datasets) {
+        Dataset* ds = env.getOrCreateDataset(dsNode).get();
         if (!ds) {
-            throw std::runtime_error("Dataset not found for MERGE: " + dsName);
+            throw std::runtime_error("Dataset not found for MERGE: " + dsNode.getFullDsName());
         }
         mergeDatasets.push_back(ds);
     }
@@ -1721,15 +1720,16 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
-        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC FREQ.");
+        throw std::runtime_error("Input dataset '" + node->inputDataSet.getFullDsName() + "' not found for PROC FREQ.");
     }
 
     // Apply WHERE condition if specified
     Dataset* filteredDS = inputDS;
     if (node->whereCondition) {
         // Create a temporary dataset to hold filtered rows
-        std::string tempDSName = "TEMP_FREQ_FILTERED";
-        auto tempDS = env.getOrCreateDataset(tempDSName);
+        DatasetRefNode dsNode;
+        dsNode.dataName = "TEMP_FREQ_FILTERED";
+        auto tempDS = env.getOrCreateDataset(dsNode);
         tempDS->rows.clear();
 
         for (const auto& row : inputDS->rows) {
@@ -1886,7 +1886,7 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
-        throw std::runtime_error("Input dataset '" + node->inputDataSet + "' not found for PROC PRINT.");
+        throw std::runtime_error("Input dataset '" + node->inputDataSet.getFullDsName() + "' not found for PROC PRINT.");
     }
 
     // Determine which variables to print
@@ -2010,8 +2010,9 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
     // Extend this method to handle joins, subqueries, and other SQL features
 
     // Create a new dataset to store the results
-    std::string resultTableName = "SQL_RESULT";
-    Dataset* resultDS = env.getOrCreateDataset(resultTableName).get();
+    DatasetRefNode dsNode;
+    dsNode.dataName = "SQL_RESULT";
+    Dataset* resultDS = env.getOrCreateDataset(dsNode).get();
     resultDS->rows.clear();
 
     // Determine source tables
@@ -2024,10 +2025,11 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
         throw std::runtime_error("Multi-table SELECT statements (joins) are not yet supported.");
     }
 
-    std::string sourceTableName = selectStmt->fromTables[0];
-    Dataset* sourceDS = env.getOrCreateDataset(sourceTableName).get();
+    DatasetRefNode dsNodeFrom;
+    dsNodeFrom.dataName = selectStmt->fromTables[0];
+    Dataset* sourceDS = env.getOrCreateDataset(dsNodeFrom).get();
     if (!sourceDS) {
-        throw std::runtime_error("Source table '" + sourceTableName + "' not found for SELECT statement.");
+        throw std::runtime_error("Source table '" + dsNodeFrom.getFullDsName() + "' not found for SELECT statement.");
     }
 
     // Iterate over source dataset rows and apply WHERE condition
@@ -2144,8 +2146,9 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
 
 void Interpreter::executeCreateTable(const CreateTableStatementNode* createStmt) {
     // Create a new dataset with the specified columns
-    std::string newTableName = createStmt->tableName;
-    Dataset* newDS = env.getOrCreateDataset(newTableName).get();
+    DatasetRefNode dsNode;
+    dsNode.dataName = createStmt->tableName;
+    Dataset* newDS = env.getOrCreateDataset(dsNode).get();
     newDS->rows.clear();
 
     // For simplicity, initialize columns without specific data types
@@ -2153,7 +2156,7 @@ void Interpreter::executeCreateTable(const CreateTableStatementNode* createStmt)
         // todo newDS->columns[col] = Value(); // Initialize with default values
     }
 
-    logLogger.info("PROC SQL: Created table '{}'.", newTableName);
+    logLogger.info("PROC SQL: Created table '{}'.", dsNode.getFullDsName());
 }
 
 // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
@@ -2236,9 +2239,6 @@ void Interpreter::executeMacroCall(MacroCallNode* node) {
 }
 
 void Interpreter::reset() {
-    // Clear datasets
-    env.dataSets.clear();
-
     // Clear macros
     macros.clear();
 

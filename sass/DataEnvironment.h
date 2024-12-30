@@ -14,6 +14,7 @@
 #include "Dataset.h"
 #include "Library.h"
 #include "sasdoc.h"
+#include "AST.h"
 
 namespace sass {
     // Manages datasets, global options, librefs, and titles
@@ -21,9 +22,6 @@ namespace sass {
     public:
         DataEnvironment();
         ~DataEnvironment();
-
-        // Store datasets by name
-        std::unordered_map<std::string, std::shared_ptr<Dataset>> dataSets;
 
         // Current row being processed in a DATA step
         Row currentRow;
@@ -51,7 +49,7 @@ namespace sass {
         }
 
         // Retrieve or create a dataset
-        std::shared_ptr<Dataset> getOrCreateDataset(const std::string& datasetName);
+        std::shared_ptr<Dataset> getOrCreateDataset(DatasetRefNode& ds);
 
         // Set a global option
         void setOption(const std::string& option, const std::string& value) {
@@ -82,43 +80,6 @@ namespace sass {
         // Set a title
         void setTitle(const std::string& t) {
             title = t;
-        }
-
-        // Load a dataset from a CSV file (for demonstration)
-        void loadDatasetFromCSV(const std::string& libref, const std::string& datasetName, const std::string& filepath) {
-            auto dataset = getOrCreateDataset(datasetName);
-            std::ifstream file(filepath);
-            if (!file.is_open()) {
-                throw std::runtime_error("Failed to open CSV file: " + filepath);
-            }
-
-            std::string line;
-            // Read header
-            if (!std::getline(file, line)) {
-                throw std::runtime_error("Empty CSV file: " + filepath);
-            }
-
-            std::vector<std::string> headers = split(line, ',');
-            dataset->columnOrder = headers;
-
-            // Read data rows
-            while (std::getline(file, line)) {
-                std::vector<std::string> values = split(line, ',');
-                Row row;
-                for (size_t i = 0; i < headers.size() && i < values.size(); ++i) {
-                    // Attempt to parse as double, else treat as string
-                    try {
-                        double num = std::stod(values[i]);
-                        row.columns[headers[i]] = num;
-                    }
-                    catch (...) {
-                        row.columns[headers[i]] = values[i];
-                    }
-                }
-                dataset->addRow(row);
-            }
-
-            file.close();
         }
 
         std::shared_ptr<Dataset> loadSas7bdat(const std::string& filepath, const std::string& dsName); 

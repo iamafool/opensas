@@ -5,6 +5,7 @@
 #include "TempUtils.h"
 #include "utility.h"
 #include <filesystem>
+#include "AST.h"
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -56,7 +57,6 @@ namespace sass {
     std::shared_ptr<Dataset> DataEnvironment::loadSas7bdat(const std::string& filepath, const std::string& dsName) {
         auto ds = std::make_shared<Dataset>();
         ds->name = dsName;
-        dataSets[dsName] = ds;
 
         SasDoc* doc = new SasDoc();
         wstring filepath1 = wstring(filepath.begin(), filepath.end());
@@ -115,15 +115,11 @@ namespace sass {
 
     // Suppose your getOrCreateDataset uses the library name and dataset name
     // e.g. "WORK.mydata"
-    std::shared_ptr<Dataset> DataEnvironment::getOrCreateDataset(const std::string& fullName) {
+    std::shared_ptr<Dataset> DataEnvironment::getOrCreateDataset(DatasetRefNode& ds) {
         // parse "LIBREF.DATASETNAME"
-        auto pos = fullName.find('.');
-        std::string lib = "WORK";
-        std::string dsName = fullName;
-        if (pos != std::string::npos) {
-            lib = fullName.substr(0, pos);
-            dsName = fullName.substr(pos + 1);
-        }
+        std::string lib = ds.libref.empty() ? "WORK" : ds.libref;
+        std::string dsName = ds.dataName;
+
         auto library = getLibrary(lib);
         if (!library) {
             // define a new library if not found?

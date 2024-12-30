@@ -1,4 +1,5 @@
 #include "Parser.h"
+#include "Parser.h"
 #include "utility.h"
 #include <stdexcept>
 #include <sstream>
@@ -154,16 +155,14 @@ std::unique_ptr<ASTNode> Parser::parseDataStep() {
     // consume 'data'
     consume(TokenType::KEYWORD_DATA, "Expected 'data'");
 
+
     // We expect an identifier for dataset name
     if (peek().type == TokenType::EOF_TOKEN) {
         // Not enough tokens -> incomplete
         return nullptr;
     }
 
-    Token dsNameTok = advance();
-    if (dsNameTok.type != TokenType::IDENTIFIER) {
-        throw std::runtime_error("Expected dataset name after 'data'");
-    }
+    auto dsNode = parseDatasetName();
 
     // Optional semicolon
     // In real SAS, you do typically: data someDs; ...
@@ -204,7 +203,7 @@ std::unique_ptr<ASTNode> Parser::parseDataStep() {
     }
 
     // If we get here, we found 'run;'
-    dataNode->outputDataSet = dsNameTok.text;
+    dataNode->outputDataSet = *dsNode;
     // In real code, you'd also store any statements parsed inside the data step.
     // For now, we just fill in the dataset name.
 
@@ -631,7 +630,8 @@ std::unique_ptr<ASTNode> Parser::parseMerge() {
 
     // Parse dataset names
     while (peek().type == TokenType::IDENTIFIER) {
-        mergeNode->datasets.push_back(consume(TokenType::IDENTIFIER, "Expected dataset name in MERGE statement").text);
+        auto dsNode = parseDatasetName();
+        mergeNode->datasets.push_back(*dsNode);
     }
 
     // Expect semicolon
@@ -703,8 +703,9 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
     // Parse DATA= option
     if (match(TokenType::KEYWORD_DATA)) {
         consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC SORT");
-        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
-        procSortNode->inputDataSet = dataToken.text;
+
+        auto dsNode = parseDatasetName();
+        procSortNode->inputDataSet = *dsNode;
     }
     else {
         throw std::runtime_error("PROC SORT requires a DATA= option");
@@ -713,8 +714,8 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
     // Parse OUT= option (optional)
     if (match(TokenType::KEYWORD_OUT)) {
         consume(TokenType::KEYWORD_OUT, "Expected 'OUT=' option in PROC SORT");
-        Token outToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'OUT='");
-        procSortNode->outputDataSet = outToken.text;
+        auto dsNode = parseDatasetName();
+        procSortNode->outputDataSet = *dsNode;
     }
 
     // Parse BY statement
@@ -763,8 +764,8 @@ std::unique_ptr<ASTNode> Parser::parseProcMeans() {
     // Parse DATA= option
     if (match(TokenType::KEYWORD_DATA)) {
         consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC MEANS");
-        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
-        procMeansNode->inputDataSet = dataToken.text;
+        auto dsNode = parseDatasetName();
+        procMeansNode->inputDataSet = *dsNode;
     }
     else {
         throw std::runtime_error("PROC MEANS requires a DATA= option");
@@ -819,8 +820,8 @@ std::unique_ptr<ASTNode> Parser::parseProcMeans() {
         consume(TokenType::KEYWORD_OUTPUT, "Expected 'OUTPUT' keyword in PROC MEANS");
         if (match(TokenType::KEYWORD_OUT)) {
             consume(TokenType::KEYWORD_OUT, "Expected 'OUT=' option in OUTPUT statement");
-            Token outToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'OUT='");
-            procMeansNode->outputDataSet = outToken.text;
+            auto dsNode = parseDatasetName();
+            procMeansNode->outputDataSet = *dsNode;
         }
 
         // Parse output options like N=, MEAN=, etc.
@@ -851,8 +852,8 @@ std::unique_ptr<ASTNode> Parser::parseProcFreq() {
     // Parse DATA= option
     if (match(TokenType::KEYWORD_DATA)) {
         consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC FREQ");
-        Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
-        procFreqNode->inputDataSet = dataToken.text;
+        auto dsNode = parseDatasetName();
+        procFreqNode->inputDataSet = *dsNode;
     }
     else {
         throw std::runtime_error("PROC FREQ requires a DATA= option");
@@ -920,8 +921,8 @@ std::unique_ptr<ASTNode> Parser::parseProcPrint() {
         // Parse DATA= option
         if (match(TokenType::KEYWORD_DATA)) {
             consume(TokenType::EQUAL, "Expected '=' after 'DATA'");
-            Token dataToken = consume(TokenType::IDENTIFIER, "Expected dataset name after 'DATA='");
-            procPrintNode->inputDataSet = dataToken.text;
+            auto dsNode = parseDatasetName();
+            procPrintNode->inputDataSet = *dsNode;
         }
         if (match(TokenType::KEYWORD_OBS)) {
             consume(TokenType::KEYWORD_OBS, "Expected 'OBS=' option");
@@ -1252,6 +1253,40 @@ std::unique_ptr<ASTNode> Parser::parseDatalines() {
     }
     node->lines = lines;
     return node;
+}
+
+// Pseudocode grammar
+// dataset_name : IDENTIFIER ( DOT IDENTIFIER )? ;
+//
+// meaning you can have:
+//   "mydata" 
+// or "mylib.mydata"
+
+std::unique_ptr<DatasetRefNode> Parser::parseDatasetName() {
+    // Expect an identifier
+    Token t1 = consume(TokenType::IDENTIFIER, "Expected dataset or libref name");
+    std::string firstName = t1.text;
+
+    // Optionally check for DOT
+    if (match(TokenType::DOT)) {
+        // Then we expect another identifier
+        Token t2 = consume(TokenType::IDENTIFIER, "Expected dataset name after '.'");
+        std::string secondName = t2.text;
+
+        // Now you have libref=firstName, datasetName=secondName
+        // return some AST object that stores them
+        auto dsNode = std::make_unique<DatasetRefNode>();
+        dsNode->libref = firstName;
+        dsNode->dataName = secondName;
+        return dsNode;
+    }
+    else {
+        // No dot => single-part name
+        auto dsNode = std::make_unique<DatasetRefNode>();
+        dsNode->libref = "";   // or "WORK" if you default
+        dsNode->dataName = firstName;
+        return dsNode;
+    }
 }
 
 }

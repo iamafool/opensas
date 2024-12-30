@@ -20,11 +20,23 @@ namespace sass {
         virtual ~ExpressionNode() = default;
     };
 
+    // dataset
+    class DatasetRefNode : public ASTNode {
+    public:
+        std::string libref;
+        std::string dataName;
+
+        std::string getFullDsName()
+        {
+            return libref + '.' + dataName;
+        }
+    };
+
     // Represents a DATA step block: data <dataset>; set <source>; <statements>; run;
     class DataStepNode : public ASTNode {
     public:
-        std::string outputDataSet; // e.g., mylib.out
-        std::string inputDataSet;  // e.g., mylib.in
+        DatasetRefNode outputDataSet; // e.g., mylib.out
+        DatasetRefNode inputDataSet;  // e.g., mylib.in
         std::vector<std::unique_ptr<ASTNode>> statements;
     };
 
@@ -175,8 +187,8 @@ namespace sass {
     // Represents a PROC SORT step: proc sort data=<dataset>; by <variables>; run;
     class ProcSortNode : public ASTNode {
     public:
-        std::string inputDataSet;    // Dataset to sort (DATA=)
-        std::string outputDataSet;   // Output dataset (OUT=), can be empty
+        DatasetRefNode inputDataSet;    // Dataset to sort (DATA=)
+        DatasetRefNode outputDataSet;   // Output dataset (OUT=), can be empty
         std::vector<std::string> byVariables; // Variables to sort by
         std::unique_ptr<ASTNode> whereCondition; // Optional WHERE condition
         bool nodupkey;               // Flag for NODUPKEY option
@@ -186,10 +198,10 @@ namespace sass {
     // Represents the PROC MEANS procedure
     class ProcMeansNode : public ASTNode {
     public:
-        std::string inputDataSet;                    // Dataset to analyze (DATA=)
+        DatasetRefNode inputDataSet;                    // Dataset to analyze (DATA=)
         std::vector<std::string> statistics;         // Statistical options (N, MEAN, etc.)
         std::vector<std::string> varVariables;       // Variables to analyze (VAR statement)
-        std::string outputDataSet;                   // Output dataset (OUT=), can be empty
+        DatasetRefNode outputDataSet;                   // Output dataset (OUT=), can be empty
         std::unordered_map<std::string, std::string> outputOptions; // Output options like n=, mean=, etc.
         std::unique_ptr<ASTNode> whereCondition; // Optional WHERE 
     };
@@ -228,7 +240,7 @@ namespace sass {
     // Represents a MERGE statement: merge dataset1 dataset2 ...;
     class MergeStatementNode : public ASTNode {
     public:
-        std::vector<std::string> datasets;
+        std::vector<DatasetRefNode> datasets;
     };
 
     // Represents a DO loop: do; ... end;
@@ -248,7 +260,7 @@ namespace sass {
     // Represents the PROC FREQ procedure
     class ProcFreqNode : public ASTNode {
     public:
-        std::string inputDataSet;                              // Dataset to analyze (DATA=)
+        DatasetRefNode inputDataSet;                              // Dataset to analyze (DATA=)
         std::vector<std::pair<std::string, std::vector<std::string>>> tables; // Tables to generate, e.g., var1*var2
         std::unique_ptr<ASTNode> whereCondition;        // Optional WHERE condition
         std::vector<std::string> options;                      // Options for the TABLES statement
@@ -257,7 +269,7 @@ namespace sass {
     // Represents the PROC PRINT procedure
     class ProcPrintNode : public ProcNode {
     public:
-        std::string inputDataSet;                    // Dataset to print (DATA=)
+        DatasetRefNode inputDataSet;                    // Dataset to print (DATA=)
         std::vector<std::string> varVariables;       // Variables to display (VAR statement), optional
         std::unordered_map<std::string, std::string> options; // Options like OBS=, NOOBS, LABEL, etc.
     };
