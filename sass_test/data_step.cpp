@@ -114,3 +114,38 @@ mary 30
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "mary");
     EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 30.0);
 }
+
+TEST_F(SassTest, DataStepSet1) {
+    std::string code = R"(
+        libname test "c:\workspace\c++\sass\test\data\";
+        data dm;
+            set test.dm; 
+        run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 2);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    // 4) Check dataset WORK.employees => 2 obs, 2 vars
+    // Verify that the dataset 'a' exists with correct values
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "dm.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 16);
+    EXPECT_EQ(sasdoc1.obs_count, 5);
+}

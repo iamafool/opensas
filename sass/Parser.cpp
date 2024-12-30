@@ -1,5 +1,6 @@
 #include "Parser.h"
 #include "Parser.h"
+#include "Parser.h"
 #include "utility.h"
 #include <stdexcept>
 #include <sstream>
@@ -84,6 +85,9 @@ ParseResult Parser::parseStatement() {
             astNode = parseDatalines(); break;
 		case TokenType::KEYWORD_DATA:
 			astNode = parseDataStep(); break;
+        case TokenType::KEYWORD_SET:
+            advance();
+            astNode = parseSetStatement(); break;
 		case TokenType::KEYWORD_OPTIONS:
 			astNode = parseOptions(); break;
 		case TokenType::KEYWORD_LIBNAME:
@@ -1289,4 +1293,26 @@ std::unique_ptr<DatasetRefNode> Parser::parseDatasetName() {
     }
 }
 
+std::unique_ptr<ASTNode> Parser::parseSetStatement() {
+    // We assume we've already consumed the 'SET' keyword token
+    // e.g. if (match(TokenType::KEYWORD_SET)) { parseSetStatement(); }
+
+    auto setNode = std::make_unique<SetStatementNode>();
+
+    // parse one or more dataset references
+    // e.g. "in1" or "libref.dataset", "libref.dataset2" ...
+    // We'll do something like: while we see an IDENTIFIER, parse datasetRef
+    while (peek().type == TokenType::IDENTIFIER) {
+        // parse datasetRef as "IDENTIFIER (DOT IDENTIFIER)?" 
+        // either "someDS" or "lib.someDS"
+        auto dsNode = parseDatasetName();
+        // store it
+        setNode->dataSets.push_back(*dsNode);
+    }
+
+    // Then expect a semicolon
+    consume(TokenType::SEMICOLON, "Expected ';' after SET statement");
+
+    return setNode;
+}
 }

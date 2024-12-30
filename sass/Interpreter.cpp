@@ -1,6 +1,7 @@
 #include "Interpreter.h"
 #include "Interpreter.h"
 #include "Interpreter.h"
+#include "Interpreter.h"
 #include "Sorter.h"
 #include <iostream>
 #include <stdexcept>
@@ -213,9 +214,6 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     // 2) Build a PDV
     PDV pdv;
 
-    // We want to see if there's an input dataset
-    bool hasInputDataset = !node->inputDataSet.dataName.empty();
-
     // We also want to gather any InputNode or DatalinesNode statements
     std::vector<std::pair<std::string, bool>> inputVars; // (varName, isString)
     std::vector<std::string> datalines;
@@ -240,6 +238,10 @@ void Interpreter::executeDataStep(DataStepNode* node) {
                 datalines.push_back(line);
             }
         }
+        else if (auto set = dynamic_cast<SetStatementNode*>(stmt))
+        {
+            executeSetStatement(set, node);
+        }
         else {
             // It's not input or datalines, so store it in dataStepStmts
             dataStepStmts.push_back(stmt);
@@ -261,6 +263,11 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     //-------------------------------------------------------------------
     // 4) If user specified an input dataset: "data out; set in; ..."
     //-------------------------------------------------------------------
+    // We want to see if there's an input dataset
+    if (node->inputDataSet.dataName.empty() && node->inputDataSets.size() > 0)
+        node->inputDataSet = node->inputDataSets[0];
+    bool hasInputDataset = !node->inputDataSet.dataName.empty();
+
     if (hasInputDataset) {
         // Let's get that dataset (SasDoc)
         auto inDocPtr = env.getOrCreateDataset(node->inputDataSet);
@@ -2279,5 +2286,11 @@ void Interpreter::handleReplInput(const std::string& input) {
     }
 }
 
+void Interpreter::executeSetStatement(SetStatementNode* node, DataStepNode* dataStepNode) {
+    for (auto& dsName : node->dataSets) {
+        // e.g. "a_in.dm"
+        dataStepNode->inputDataSets.push_back(dsName);
+    }
+}
 }
 

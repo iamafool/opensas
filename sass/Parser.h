@@ -78,6 +78,8 @@ namespace sass {
 
         std::unique_ptr<DatasetRefNode> parseDatasetName();
 
+        std::unique_ptr<ASTNode> parseSetStatement();
+
         // Expression parsing with precedence
         std::unique_ptr<ASTNode> parseExpression(int precedence = 0);
         std::unique_ptr<ASTNode> parsePrimary();

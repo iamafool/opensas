@@ -27,6 +27,8 @@ namespace sass {
 
         void handleReplInput(const std::string& input);
 
+        void executeSetStatement(SetStatementNode* node, DataStepNode* dataStepNode);
+
     private:
         DataEnvironment& env;
         spdlog::logger& lstLogger;

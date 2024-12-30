@@ -32,12 +32,29 @@ namespace sass {
         }
     };
 
+    // e.g. dataStep code: data out; set in1 in2 ; ...
+    class SetStatementNode : public ASTNode {
+    public:
+        // a list of dataset references
+        std::vector<DatasetRefNode> dataSets;
+        // Possibly, we also store optional modifiers like "obs=10" or "nobs=var"
+        // For a minimal approach, just store the dataset names
+
+        // Example:
+        // data out;
+        //   set a_in.dm b_in.test;
+        // run;
+        //
+        // dataSets => { "a_in.dm", "b_in.test" }
+    };
+
     // Represents a DATA step block: data <dataset>; set <source>; <statements>; run;
     class DataStepNode : public ASTNode {
     public:
         DatasetRefNode outputDataSet; // e.g., mylib.out
         DatasetRefNode inputDataSet;  // e.g., mylib.in
         std::vector<std::unique_ptr<ASTNode>> statements;
+        std::vector<DatasetRefNode> inputDataSets;
     };
 
     // Represents a variable assignment: var = expression;
