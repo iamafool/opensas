@@ -102,6 +102,8 @@ void Interpreter::executeDataStepStatement(
             PdvVar newVar;
             newVar.name = assign->varName;
             newVar.isNumeric = std::holds_alternative<double>(val);
+            if (!newVar.isNumeric)
+                newVar.length = std::get<std::string>(val).size();
             pdv.addVariable(newVar);
             pdvIndex = pdv.findVarIndex(assign->varName);
         }
@@ -126,7 +128,8 @@ void Interpreter::executeDataStepStatement(
     }
     else if (auto outStmt = dynamic_cast<OutputNode*>(stmt)) {
         // Mark that we want to output this row
-        doOutputThisRow = true;
+        // doOutputThisRow = true;
+        appendPdvRowToSasDoc(pdv, outDoc);
     }
     else if (auto dropStmt = dynamic_cast<DropNode*>(stmt)) {
         for (auto& varName : dropStmt->variables) {
