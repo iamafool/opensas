@@ -1280,15 +1280,15 @@ std::unique_ptr<DatasetRefNode> Parser::parseDatasetName() {
         // Now you have libref=firstName, datasetName=secondName
         // return some AST object that stores them
         auto dsNode = std::make_unique<DatasetRefNode>();
-        dsNode->libref = firstName;
-        dsNode->dataName = secondName;
+        dsNode->libref = to_upper(firstName);
+        dsNode->dataName = to_upper(secondName);
         return dsNode;
     }
     else {
         // No dot => single-part name
         auto dsNode = std::make_unique<DatasetRefNode>();
         dsNode->libref = "";   // or "WORK" if you default
-        dsNode->dataName = firstName;
+        dsNode->dataName = to_upper(firstName);
         return dsNode;
     }
 }

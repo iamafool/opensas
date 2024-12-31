@@ -53,26 +53,17 @@ namespace sass {
     // If successful, store it in datasets[dsName]
     bool Library::loadDatasetFromSas7bdat(const std::string& dsName) {
         if (accessMode == LibraryAccess::READONLY || accessMode == LibraryAccess::READWRITE) {
-            // We can at least read from the library path
-            // Build the file path
-            std::string filePath = libPath + "/" + dsName + ".sas7bdat";
+            fs::path filePath = fs::path(libPath) / fs::path(dsName + ".sas7bdat");
+            if (!fs::exists(filePath)) return false;
 
-            // You can call your SasDoc code or readstat to parse the file
-            // e.g. auto doc = std::make_shared<SasDoc>();
-            // if (SasDoc::read_sas7bdat(filePath, doc.get()) == 0) {
-            //     // success
-            //     this->datasets[dsName] = doc; // or convert doc-> to a Dataset
-            //     return true;
-            // } else {
-            //     return false;
-            // }
-
-            // For now, just pretend
-            std::cout << "[Library] Loading " << dsName << " from " << filePath << std::endl;
-            auto dummyDataset = std::make_shared<Dataset>();
-            dummyDataset->name = dsName;
-            datasets[dsName] = dummyDataset;
-            return true;
+            auto doc = std::make_shared<SasDoc>();
+            if (SasDoc::read_sas7bdat(filePath.wstring(), doc.get()) == 0) {
+                // success
+                this->datasets[dsName] = doc; // or convert doc-> to a Dataset
+                return true;
+            } else {
+                return false;
+            }
         }
         else {
             std::cerr << "[Library] Cannot read dataset in TEMP or restricted mode.\n";
@@ -110,6 +101,7 @@ namespace sass {
     std::shared_ptr<Dataset> Library::getOrCreateDataset(const std::string& dsName) {
         auto it = datasets.find(dsName);
         if (it != datasets.end()) {
+
             return it->second;
         }
         auto newds = std::make_shared<SasDoc>();

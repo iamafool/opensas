@@ -119,6 +119,9 @@ namespace sass {
         // Possibly a method to remove a library
         void removeLibrary(const std::string& libref);
 
+        // Get libraries
+        std::unordered_map<std::string, std::shared_ptr<Library>>   getLibraries();
+
         // Possibly a method to load a dataset: libref.datasetName
         bool loadDataset(const std::string& libref, const std::string& dsName) {
             auto lib = getLibrary(libref);

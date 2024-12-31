@@ -130,7 +130,12 @@ namespace sass {
             library = getLibrary(lib);
         }
         // Now get or create the dataset in that library
+        auto rc = loadDataset(lib, dsName);
         return library->getOrCreateDataset(dsName);
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<Library>>   DataEnvironment::getLibraries() {
+        return libraries;
     }
 
 }

@@ -305,7 +305,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             }
 
             // (c) If doOutputThisRow==true, copy from PDV => outDoc
-            if (doOutputThisRow) {
+            if (doOutputThisRow || !hasOutputStatement) {
                 appendPdvRowToSasDoc(pdv, outDoc.get());
             }
 
