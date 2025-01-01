@@ -1950,7 +1950,7 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
                 rowStream << "\t";
             }
         }
-        logLogger.info(rowStream.str());
+        lstLogger.info(rowStream.str());
         obsCount++;
     }
 
