@@ -54,16 +54,13 @@ namespace sass {
         libraries.erase(libref);
     }
 
-    std::shared_ptr<Dataset> DataEnvironment::loadSas7bdat(const std::string& filepath, const std::string& dsName) {
-        auto ds = std::make_shared<Dataset>();
-        ds->name = dsName;
-
+    std::shared_ptr<SasDoc> DataEnvironment::loadSas7bdat(const std::string& filepath, const std::string& dsName) {
         SasDoc* doc = new SasDoc();
         wstring filepath1 = wstring(filepath.begin(), filepath.end());
         int rc = doc->read_sas7bdat(filepath1, doc);
 
         if (rc == READSTAT_OK) {
-            return ds;
+            return unique_ptr<SasDoc>(doc);
         }
     }
 

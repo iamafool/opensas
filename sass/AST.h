@@ -28,7 +28,7 @@ namespace sass {
 
         std::string getFullDsName()
         {
-            return libref + '.' + dataName;
+            return (libref.empty() ? "WORK" : libref) + '.' + dataName;
         }
     };
 

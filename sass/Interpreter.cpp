@@ -1161,10 +1161,8 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
     // Evaluate primary IF condition
     Value cond = evaluate(node->condition.get());
     double d = toNumber(cond);
-    logLogger.info("Evaluating IF condition: {}", d);
 
     if (d != 0.0) { // Non-zero is true
-        logLogger.info("Condition is TRUE. Executing THEN statements.");
         for (const auto& stmt : node->thenStatements) {
             if (auto block = dynamic_cast<BlockNode*>(stmt.get())) {
                 executeBlock(block);
@@ -1180,10 +1178,8 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
     for (const auto& branch : node->elseIfBranches) {
         Value elseIfCond = evaluate(branch.first.get());
         double elseIfD = toNumber(elseIfCond);
-        logLogger.info("Evaluating ELSE IF condition: {}", elseIfD);
 
         if (elseIfD != 0.0) { // Non-zero is true
-            logLogger.info("ELSE IF condition is TRUE. Executing ELSE IF statements.");
             for (const auto& stmt : branch.second) {
                 if (auto block = dynamic_cast<BlockNode*>(stmt.get())) {
                     executeBlock(block);
@@ -1198,7 +1194,6 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
 
     // Execute ELSE statements if no conditions were true
     if (!node->elseStatements.empty()) {
-        logLogger.info("All conditions FALSE. Executing ELSE statements.");
         for (const auto& stmt : node->elseStatements) {
             if (auto block = dynamic_cast<BlockNode*>(stmt.get())) {
                 executeBlock(block);
@@ -1207,9 +1202,6 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
                 execute(stmt.get());
             }
         }
-    }
-    else {
-        logLogger.info("All conditions FALSE. No ELSE statements to execute.");
     }
 }
 
@@ -1877,7 +1869,7 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
     }
     else {
         // If VAR statement is not specified, print all variables
-        for (const auto& column : inputDS->columnOrder) {
+        for (const auto& column : inputDS->getColumnNames()) {
             varsToPrint.push_back(column);
         }
     }
@@ -1927,12 +1919,12 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
 
     // Iterate over rows and print data
     int obsCount = 0;
-    for (size_t i = 0; i < inputDS->rows.size(); ++i) {
+    for (size_t i = 0; i < inputDS->getRowCount(); ++i) {
         if (obsLimit != -1 && obsCount >= obsLimit) {
             break;
         }
 
-        const Row& row = inputDS->rows[i];
+        const Row& row = inputDS->getRow(i);
         std::stringstream rowStream;
         if (!noObs) {
             rowStream << (i + 1) << "\t";
@@ -1962,7 +1954,7 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
         obsCount++;
     }
 
-    logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->rows.size(), inputDS->name);
+    logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->getRowCount(), node->inputDataSet.getFullDsName());
 }
 
 void Interpreter::executeProcSQL(ProcSQLNode* node) {

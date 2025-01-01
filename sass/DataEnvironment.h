@@ -82,7 +82,7 @@ namespace sass {
             title = t;
         }
 
-        std::shared_ptr<Dataset> loadSas7bdat(const std::string& filepath, const std::string& dsName); 
+        std::shared_ptr<SasDoc> loadSas7bdat(const std::string& filepath, const std::string& dsName); 
 
         void saveSas7bdat(const std::string& dsName, const std::string& filepath);
 

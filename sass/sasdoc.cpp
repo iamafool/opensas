@@ -1,4 +1,5 @@
 #include "sasdoc.h"
+#include "sasdoc.h"
 #include <ReadStat/readstat.h>
 #include <cmath>
 #include <cstddef>
@@ -298,7 +299,7 @@ namespace sass {
 
 		// for demonstration, set some metadata
 		readstat_writer_set_file_label(writer, doc->file_label.c_str());
-		readstat_writer_set_file_format_version(writer, 5);
+		// readstat_writer_set_file_format_version(writer, 5);
 		// readstat_writer_set_file_encoding(writer, "UTF-8");
 		// etc. as needed
 
@@ -584,4 +585,29 @@ namespace sass {
 		}
 		return label;
 	}
+
+	std::vector<VariableDef> SasDoc::getColumns() const
+	{
+		std::vector<VariableDef> vec;
+
+		for (auto i = 0; i != var_names.size(); i++)
+		{
+			VariableDef var;
+			var.name = var_names[i];
+			var.label = var_labels[i];
+			var.length = var_length[i];
+			var.format = var_formats[i];
+			var.informat = "";
+			vec.push_back(var);
+		}
+
+		return vec;
+	}
+
+	std::vector<std::string> SasDoc::getColumnNames() const {
+		// In many cases, SasDoc simply uses var_names as the list of columns
+		// Return that directly
+		return var_names;
+	}
+
 }

@@ -10,6 +10,7 @@
 #include <vector>
 #include "Dataset.h"
 #include "include/unistd.h"
+#include "utility.h"
 
 using std::string;
 using std::vector;
@@ -49,8 +50,27 @@ namespace sass {
         void addRow(const Row& row) override {
             // Possibly convert row to readstat logic or store in "values" array
             // or call the base if we want to keep normal row-based storage
-            Dataset::addRow(row);
+            // todo
         }
+        std::vector<VariableDef> getColumns() const override;
+        // Implementation of virtual method from Dataset
+        std::vector<std::string> getColumnNames() const override;
+        int getRowCount() const override {
+            return obs_count;
+        }
+        int getColumnCount() const {
+            return var_count;
+        }
+
+        Row getRow(int index) const {
+            Row row;
+            for (auto i = 0; i != var_count; i++)
+            {
+                row.columns.emplace(std::pair<std::string, Value>(var_names[i], cellToValue(values[var_count * index + i])));
+            }
+            return row;
+        }
+
         static int handle_metadata(readstat_metadata_t* metadata, void* ctx);
         static int handle_metadata_xpt(readstat_metadata_t* metadata, void* ctx);
         static int handle_variable(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);

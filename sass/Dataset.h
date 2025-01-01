@@ -37,16 +37,17 @@ namespace sass {
         std::string name;
         std::vector<Row> rows;
 
-        // Column metadata
-        std::vector<VariableDef> varDefs;
-
-        // Optional: Define column order for consistent output
-        std::vector<std::string> columnOrder;
-
         // Method to add a row to the dataset
-        virtual void addRow(const Row& row) {
-            rows.push_back(row);
-        }
+        virtual void addRow(const Row& row) = 0;
+
+        // Method to get all the columns
+        virtual std::vector<VariableDef> getColumns() const = 0;
+        virtual std::vector<std::string> getColumnNames() const = 0;
+
+        virtual int getRowCount() const = 0;
+        virtual int getColumnCount() const = 0;
+
+        virtual Row getRow(int i) const = 0;
     };
 
 

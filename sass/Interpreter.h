@@ -99,46 +99,6 @@ namespace sass {
         Dataset* executeSelect(const SelectStatementNode* selectStmt);
         void executeCreateTable(const CreateTableStatementNode* createStmt);
         // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
-
-        static Value cellToValue(const Cell& input)
-        {
-            // Use std::visit with a lambda
-            return std::visit(
-                [](auto&& arg) -> Value {
-                    using T = std::decay_t<decltype(arg)>;
-                    // If we have a flyweight_string
-                    if constexpr (std::is_same_v<T, flyweight_string>) {
-                        // Convert to std::string via .get()
-                        return arg.get();
-                    }
-                    else {
-                        // must be double
-                        return arg;
-                    }
-                },
-                input
-            );
-        }
-
-        static Cell valueToCell(const Value& input)
-        {
-            // Use std::visit with a lambda
-            return std::visit(
-                [](auto&& arg) -> Cell {
-                    using T = std::decay_t<decltype(arg)>;
-                    if constexpr (std::is_same_v<T, string>) {
-                        // Convert to std::string via .get()
-                        return flyweight_string(arg);
-                    }
-                    else {
-                        // must be double
-                        return arg;
-                    }
-                },
-                input
-            );
-        }
-
     };
 
 }

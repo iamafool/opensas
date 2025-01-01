@@ -6,6 +6,16 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <boost/flyweight.hpp>
+
+
+// Define a flyweight string type
+using flyweight_string = boost::flyweight<std::string>;
+
+// Define a variant type that can hold either a flyweight string or a double
+using Cell = std::variant<flyweight_string, double>;
+
+using Value = std::variant<double, std::string>;
 
 // In-place uppercase
 static void to_upper_inplace(std::string& str) {
@@ -59,6 +69,44 @@ static std::string getLibname(const std::string& dsName)
     return lib;
 }
 
+static Value cellToValue(const Cell& input)
+{
+    // Use std::visit with a lambda
+    return std::visit(
+        [](auto&& arg) -> Value {
+            using T = std::decay_t<decltype(arg)>;
+            // If we have a flyweight_string
+            if constexpr (std::is_same_v<T, flyweight_string>) {
+                // Convert to std::string via .get()
+                return arg.get();
+            }
+            else {
+                // must be double
+                return arg;
+            }
+        },
+        input
+    );
+}
+
+static Cell valueToCell(const Value& input)
+{
+    // Use std::visit with a lambda
+    return std::visit(
+        [](auto&& arg) -> Cell {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, std::string>) {
+                // Convert to std::string via .get()
+                return flyweight_string(arg);
+            }
+            else {
+                // must be double
+                return arg;
+            }
+        },
+        input
+    );
+}
 
 #endif // !UTILITY_H
 
