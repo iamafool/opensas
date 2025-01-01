@@ -193,7 +193,7 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
 void Interpreter::executeDataStep(DataStepNode* node) {
     ScopedStepTimer timer("DATA statement", logLogger);
 
-    // 1) Create or get the output dataset (SasDoc or normal Dataset)
+    // Create or get the output dataset (SasDoc or normal Dataset)
     auto outDatasetPtr = env.getOrCreateDataset(node->outputDataSet);
     // For full readstat integration, cast to SasDoc if you want:
     auto outDoc = std::dynamic_pointer_cast<SasDoc>(outDatasetPtr);
@@ -204,7 +204,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         // env.dataSets[node->outputDataSet] = outDoc;
     }
 
-    // 2) Build a PDV
+    // Build a PDV
     PDV pdv;
     this->pdv = &pdv;
     this->doc = outDoc.get();
@@ -218,7 +218,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     // For clarity, let's store them:
     std::vector<ASTNode*> dataStepStmts;
 
-    // 3) Pre-scan node->statements to find InputNode, DatalinesNode, etc.
+    // Pre-scan node->statements to find InputNode, DatalinesNode, etc.
     for (auto& stmtUniquePtr : node->statements) {
         ASTNode* stmt = stmtUniquePtr.get();
         if (auto inp = dynamic_cast<InputNode*>(stmt)) {
@@ -243,20 +243,8 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         }
     }
 
-    // We keep track if user calls OUTPUT in statements. We'll handle that row-by-row in the PDV approach
-    bool doOutputThisRow = false;
-
-    bool hasOutputStatement = false;
-    for (auto stmt : dataStepStmts) {
-        if (dynamic_cast<OutputNode*>(stmt))
-        {
-            hasOutputStatement = true;
-            break;
-        }
-    }
-
     //-------------------------------------------------------------------
-    // 4) If user specified an input dataset: "data out; set in; ..."
+    // If user specified an input dataset: "data out; set in; ..."
     //-------------------------------------------------------------------
     // We want to see if there's an input dataset
     if (node->inputDataSet.dataName.empty() && node->inputDataSets.size() > 0)
@@ -279,7 +267,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         // We'll iterate over each row in inDoc
         int rowCount = inDoc->obs_count;
         for (int rowIndex = 0; rowIndex < rowCount; ++rowIndex) {
-            // (a) load row from inDoc->values => PDV
+            // load row from inDoc->values => PDV
             for (int col = 0; col < inDoc->var_count; ++col) {
                 Value cellVal = cellToValue(inDoc->values[rowIndex * inDoc->var_count + col]);
                 const std::string& varName = inDoc->var_names[col];
@@ -289,28 +277,26 @@ void Interpreter::executeDataStep(DataStepNode* node) {
                 }
             }
 
-            // (b) execute the other statements for this row
+            // execute the other statements for this row
             //     e.g., assignments, if-then, drop, keep, etc.
-            doOutputThisRow = false; // reset for this iteration
-
             for (auto stmt : dataStepStmts) {
                 // We'll do a helper method: executeDataStepStatement(stmt, pdv, outDoc, doOutputThisRow)
                 // That method will handle assignment, if-then, output, etc.
                 executeDataStepStatement(stmt);
             }
 
-            // (c) If doOutputThisRow==true, copy from PDV => outDoc
-            if (doOutputThisRow || !hasOutputStatement) {
+            // if no output statement
+            if (!node->hasOutput) {
                 appendPdvRowToSasDoc(pdv, outDoc.get());
             }
 
-            // (d) resetNonRetained for next iteration
+            // resetNonRetained for next iteration
             pdv.resetNonRetained();
         }
     }
     else {
         //-------------------------------------------------------------------
-        // 5) If there's NO input dataset (like "data out; input name $ age; datalines; ...; run;")
+        // If there's NO input dataset (like "data out; input name $ age; datalines; ...; run;")
         //    we handle the lines ourselves, row by row in PDV.
         //-------------------------------------------------------------------
         // First, let's define PDV variables from inputVars:
@@ -378,21 +364,19 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             }
 
             // run the other data step statements for this line
-            doOutputThisRow = false;
             for (auto stmt : dataStepStmts) {
                 executeDataStepStatement(stmt);
             }
 
-            if (doOutputThisRow || !hasOutputStatement) {
+            if (!node->hasOutput) {
                 appendPdvRowToSasDoc(pdv, outDoc.get());
             }
 
             pdv.resetNonRetained();
         }
 
-        // (b) execute the other statements for this row
-//     e.g., assignments, if-then, drop, keep, etc.
-        doOutputThisRow = false; // reset for this iteration
+        // execute the other statements for this row
+        //     e.g., assignments, if-then, drop, keep, etc.
 
         for (auto stmt : dataStepStmts) {
             // We'll do a helper method: executeDataStepStatement(stmt, pdv, outDoc, doOutputThisRow)
@@ -400,19 +384,14 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             executeDataStepStatement(stmt);
         }
 
-        // (c) If doOutputThisRow==true, copy from PDV => outDoc
-        if (doOutputThisRow) {
-            appendPdvRowToSasDoc(pdv, outDoc.get());
-        }
-
-        // (d) resetNonRetained for next iteration
+        // resetNonRetained for next iteration
         pdv.resetNonRetained();
     }
 
     // save
     env.saveSas7bdat(outDoc->name);
 
-    // 6) Final logging
+    // Final logging
     // outDoc->obs_count should be updated as we appended rows
     int obsCount = outDoc->obs_count;
     // var_count might also be known; if not we can glean from outDoc->var_names

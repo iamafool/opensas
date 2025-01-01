@@ -167,6 +167,7 @@ ParseResult Parser::parseStatement() {
 }
 
 std::unique_ptr<ASTNode> Parser::parseDataStep() {
+    dsHasOuput = false;
     auto dataNode = std::make_unique<DataStepNode>();
 
     // consume 'data'
@@ -223,6 +224,8 @@ std::unique_ptr<ASTNode> Parser::parseDataStep() {
     dataNode->outputDataSet = *dsNode;
     // In real code, you'd also store any statements parsed inside the data step.
     // For now, we just fill in the dataset name.
+
+    dataNode->hasOutput = dsHasOuput;
 
     return dataNode;
 }
@@ -321,6 +324,7 @@ std::unique_ptr<ASTNode> Parser::parseOutput() {
     auto node = std::make_unique<OutputNode>();
     consume(TokenType::KEYWORD_OUTPUT, "Expected 'output'");
     consume(TokenType::SEMICOLON, "Expected ';' after 'output'");
+    dsHasOuput = true;
     return node;
 }
 

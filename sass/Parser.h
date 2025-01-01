@@ -32,6 +32,7 @@ namespace sass {
     private:
         const std::vector<Token>& tokens;
         size_t pos = 0;
+        bool dsHasOuput;
 
         Token peek(int offset = 0) const;
         Token advance();

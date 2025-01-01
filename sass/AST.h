@@ -55,6 +55,7 @@ namespace sass {
         DatasetRefNode inputDataSet;  // e.g., mylib.in
         std::vector<std::unique_ptr<ASTNode>> statements;
         std::vector<DatasetRefNode> inputDataSets;
+        bool hasOutput;
     };
 
     // Represents a variable assignment: var = expression;

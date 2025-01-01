@@ -260,5 +260,5 @@ run;
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 30.0);
     EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 4.0);
     EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 5.0);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 3.4011973817);
+    EXPECT_NEAR(std::get<double>(sasdoc1.values[4]), 3.4011973817, 1e-7);
 }
