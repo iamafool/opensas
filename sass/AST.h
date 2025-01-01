@@ -113,7 +113,10 @@ namespace sass {
     };
 
     // Represents an OUTPUT statement
-    class OutputNode : public ASTNode {};
+    class OutputNode : public ASTNode {
+    public:
+        std::vector<DatasetRefNode> outDatasets;
+    };
 
     // Represents an OPTIONS statement: options option1=value1 option2=value2;
     class OptionsNode : public ASTNode {

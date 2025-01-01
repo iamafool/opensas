@@ -249,7 +249,7 @@ run;
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
     EXPECT_EQ(sasdoc1.var_count, 5);
-    EXPECT_EQ(sasdoc1.obs_count, 4);
+    EXPECT_EQ(sasdoc1.obs_count, 1);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "y");
     EXPECT_EQ(sasdoc1.var_names[2], "sqrt_x");

@@ -21,7 +21,7 @@ namespace sass {
         spdlog::logger& logLogger;
         void execute(ASTNode* node);
 
-        void executeDataStepStatement(ASTNode* stmt, PDV& pdv, SasDoc* outDoc, bool& doOutputThisRow);
+        void executeDataStepStatement(ASTNode* stmt);
 
         void appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc);
 
@@ -32,6 +32,7 @@ namespace sass {
     private:
         DataEnvironment& env;
         PDV* pdv = nullptr;
+        SasDoc* doc = nullptr;
         spdlog::logger& lstLogger;
         // Add a member variable to hold arrays
         std::unordered_map<std::string, std::vector<std::string>> arrays;

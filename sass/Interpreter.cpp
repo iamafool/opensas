@@ -81,11 +81,7 @@ void Interpreter::execute(ASTNode *node) {
     }
 }
 
-void Interpreter::executeDataStepStatement(
-    ASTNode* stmt,
-    PDV& pdv,
-    SasDoc* outDoc,
-    bool& doOutputThisRow)
+void Interpreter::executeDataStepStatement(ASTNode* stmt)
 {
     // This function modifies pdv or sets doOutputThisRow if an OutputNode
     // We'll do small examples:
@@ -93,7 +89,7 @@ void Interpreter::executeDataStepStatement(
     if (auto assign = dynamic_cast<AssignmentNode*>(stmt)) {
         // Evaluate
         Value val = evaluate(assign->expression.get());
-        int pdvIndex = pdv.findVarIndex(assign->varName);
+        int pdvIndex = pdv->findVarIndex(assign->varName);
         if (pdvIndex < 0) {
             // If not found, add new variable to PDV
             PdvVar newVar;
@@ -101,61 +97,58 @@ void Interpreter::executeDataStepStatement(
             newVar.isNumeric = std::holds_alternative<double>(val);
             if (!newVar.isNumeric)
                 newVar.length = std::get<std::string>(val).size();
-            pdv.addVariable(newVar);
-            pdvIndex = pdv.findVarIndex(assign->varName);
+            pdv->addVariable(newVar);
+            pdvIndex = pdv->findVarIndex(assign->varName);
         }
         // Convert Value => Cell
         if (std::holds_alternative<double>(val)) {
-            pdv.setValue(pdvIndex, std::get<double>(val));
+            pdv->setValue(pdvIndex, std::get<double>(val));
         }
         else {
-            pdv.setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
+            pdv->setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
         }
     }
-    else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt)) {
-        // Evaluate condition from PDV
-        Value condVal = evaluate(ifThen->condition.get());
-        double d = toNumber(condVal);
-        if (d != 0.0) {
-            // run thenStatements
-            for (auto& subStmt : ifThen->thenStatements) {
-                executeDataStepStatement(subStmt.get(), pdv, outDoc, doOutputThisRow);
-            }
-        }
+    else if (auto ifThen = dynamic_cast<IfElseIfNode*>(stmt)) {
+        executeIfElse(ifThen);
     }
     else if (auto outStmt = dynamic_cast<OutputNode*>(stmt)) {
-        // Mark that we want to output this row
-        // doOutputThisRow = true;
-        appendPdvRowToSasDoc(pdv, outDoc);
+        if (outStmt->outDatasets.empty())
+        {
+            appendPdvRowToSasDoc(*pdv, this->doc);
+        }
+        else
+        {
+
+        }
     }
     else if (auto dropStmt = dynamic_cast<DropNode*>(stmt)) {
         for (auto& varName : dropStmt->variables) {
-            int idx = pdv.findVarIndex(varName);
+            int idx = pdv->findVarIndex(varName);
             if (idx >= 0) {
-                pdv.pdvVars.erase(pdv.pdvVars.begin() + idx);
-                pdv.pdvValues.erase(pdv.pdvValues.begin() + idx);
+                pdv->pdvVars.erase(pdv->pdvVars.begin() + idx);
+                pdv->pdvValues.erase(pdv->pdvValues.begin() + idx);
             }
         }
     }
     else if (auto keepStmt = dynamic_cast<KeepNode*>(stmt)) {
         std::vector<PdvVar> newVars;
         std::vector<Value> newVals;
-        for (size_t i = 0; i < pdv.pdvVars.size(); i++) {
-            auto& varDef = pdv.pdvVars[i];
+        for (size_t i = 0; i < pdv->pdvVars.size(); i++) {
+            auto& varDef = pdv->pdvVars[i];
             // If varDef.name is in keepStmt->variables, keep it
             if (std::find(keepStmt->variables.begin(), keepStmt->variables.end(),
                 varDef.name) != keepStmt->variables.end())
             {
                 newVars.push_back(varDef);
-                newVals.push_back(pdv.pdvValues[i]);
+                newVals.push_back(pdv->pdvValues[i]);
             }
         }
-        pdv.pdvVars = newVars;
-        pdv.pdvValues = newVals;
+        pdv->pdvVars = newVars;
+        pdv->pdvValues = newVals;
     }
     else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
         for (auto& var : retainStmt->variables) {
-            pdv.setRetainFlag(var, true);
+            pdv->setRetainFlag(var, true);
         }
     }
     // else handle other statements: array, do loops, merges, etc.
@@ -214,6 +207,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     // 2) Build a PDV
     PDV pdv;
     this->pdv = &pdv;
+    this->doc = outDoc.get();
 
     // We also want to gather any InputNode or DatalinesNode statements
     std::vector<std::pair<std::string, bool>> inputVars; // (varName, isString)
@@ -302,7 +296,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             for (auto stmt : dataStepStmts) {
                 // We'll do a helper method: executeDataStepStatement(stmt, pdv, outDoc, doOutputThisRow)
                 // That method will handle assignment, if-then, output, etc.
-                executeDataStepStatement(stmt, pdv, outDoc.get(), doOutputThisRow);
+                executeDataStepStatement(stmt);
             }
 
             // (c) If doOutputThisRow==true, copy from PDV => outDoc
@@ -386,7 +380,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             // run the other data step statements for this line
             doOutputThisRow = false;
             for (auto stmt : dataStepStmts) {
-                executeDataStepStatement(stmt, pdv, outDoc.get(), doOutputThisRow);
+                executeDataStepStatement(stmt);
             }
 
             if (doOutputThisRow || !hasOutputStatement) {
@@ -403,7 +397,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         for (auto stmt : dataStepStmts) {
             // We'll do a helper method: executeDataStepStatement(stmt, pdv, outDoc, doOutputThisRow)
             // That method will handle assignment, if-then, output, etc.
-            executeDataStepStatement(stmt, pdv, outDoc.get(), doOutputThisRow);
+            executeDataStepStatement(stmt);
         }
 
         // (c) If doOutputThisRow==true, copy from PDV => outDoc
@@ -1197,7 +1191,7 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
                 executeBlock(block);
             }
             else {
-                execute(stmt.get());
+                executeDataStepStatement(stmt.get());
             }
         }
         return;
