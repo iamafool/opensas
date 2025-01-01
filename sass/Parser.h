@@ -36,6 +36,7 @@ namespace sass {
         Token peek(int offset = 0) const;
         Token advance();
         bool match(TokenType type);
+        bool match(std::string text);
         Token consume(TokenType type, const std::string& errMsg);
 
         // Grammar rules
@@ -65,6 +66,7 @@ namespace sass {
         std::unique_ptr<ASTNode> parseProcSort();
         std::unique_ptr<ASTNode> parseProcMeans();
         std::unique_ptr<ASTNode> parseProcFreq();
+        std::unique_ptr<ProcPrintNode> parseProcPrintStatement();
         std::unique_ptr<ASTNode> parseProcPrint();
         std::unique_ptr<ASTNode> parseProcSQL();
         std::unique_ptr<SQLStatementNode> parseSQLStatement();

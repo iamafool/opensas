@@ -1,10 +1,10 @@
 #include "Parser.h"
-#include "Parser.h"
-#include "Parser.h"
 #include "utility.h"
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
+
+using namespace std;
 
 namespace sass {
 Parser::Parser(const std::vector<Token> &t) : tokens(t) {}
@@ -35,6 +35,15 @@ bool Parser::match(TokenType type) {
     return false;
 }
 
+bool Parser::match(std::string text) {
+    if (to_upper(peek().text) == to_upper(text)) {
+        advance();
+        return true;
+    }
+    return false;
+}
+
+
 Token Parser::consume(TokenType type, const std::string &errMsg) {
     if (peek().type == type) return advance();
     std::ostringstream oss;
@@ -53,6 +62,10 @@ std::unique_ptr<ProgramNode> Parser::parseProgram() {
             auto stmt = parseStatement();
             if (stmt.status == ParseStatus::PARSE_SUCCESS) {
                 program->statements.push_back(std::move(stmt.node));
+            }
+            else if (stmt.status == ParseStatus::PARSE_ERROR)
+            {
+                throw std::runtime_error(stmt.errorMessage);
             }
         }
         catch (const std::runtime_error& e) {
@@ -911,40 +924,141 @@ std::unique_ptr<ASTNode> Parser::parseProcFreq() {
     return procFreqNode;
 }
 
+std::unique_ptr<ProcPrintNode> Parser::parseProcPrintStatement() {
+    auto printNode = std::make_unique<ProcPrintNode>();
 
-std::unique_ptr<ASTNode> Parser::parseProcPrint() {
-    bool foundRun = false;
-    auto procPrintNode = std::make_unique<ProcPrintNode>();
-    consume(TokenType::KEYWORD_PRINT, "Expected 'PRINT' keyword after 'PROC'");
+    // parse optional arguments until we see SEMICOLON
+    while (true) {
+        Token t = peek();
+        if (t.type == TokenType::SEMICOLON) {
+            // end of PROC PRINT statement
+            consume(TokenType::SEMICOLON, "Expected ';' after PROC PRINT statement");
+            break;
+        }
+        else if (t.type == TokenType::EOF_TOKEN) {
+            // incomplete
+            throw std::runtime_error("Unexpected end of file while parsing PROC PRINT statement.");
+        }
 
-    // Parse options (optional)
-    while (match(TokenType::KEYWORD_DATA) ||
-        match(TokenType::KEYWORD_OBS) ||
-        match(TokenType::KEYWORD_NOOBS) ||
-        match(TokenType::KEYWORD_LABEL)) {
-        // Parse DATA= option
-        if (match(TokenType::KEYWORD_DATA)) {
-            consume(TokenType::EQUAL, "Expected '=' after 'DATA'");
+        // Otherwise, handle recognized options
+        if (match("data")) {
+            // we expect '='
+            consume(TokenType::EQUAL, "Expected '=' after DATA");
+            // parse dataset name (like 'mylib.mydata' or a single ident)
             auto dsNode = parseDatasetName();
-            procPrintNode->inputDataSet = *dsNode;
+            printNode->inputDataSet = *dsNode;
         }
-        if (match(TokenType::KEYWORD_OBS)) {
-            consume(TokenType::KEYWORD_OBS, "Expected 'OBS=' option");
-            Token eqToken = consume(TokenType::EQUAL, "Expected '=' after 'OBS'");
-            Token numToken = consume(TokenType::NUMBER, "Expected number after 'OBS='");
-            procPrintNode->options["OBS"] = numToken.text;
+        else if (match("LABEL")) {
+            // store a simple flag
+            printNode->options["LABEL"] = "YES";
         }
-        if (match(TokenType::KEYWORD_NOOBS)) {
-            consume(TokenType::KEYWORD_NOOBS, "Expected 'NOOBS' option");
-            procPrintNode->options["NOOBS"] = "YES";
+        else if (match("NOOBS")) {
+            printNode->options["NOOBS"] = "YES";
         }
-        if (match(TokenType::KEYWORD_LABEL)) {
-            consume(TokenType::KEYWORD_LABEL, "Expected 'LABEL' option");
-            procPrintNode->options["LABEL"] = "YES";
+        else if (match("OBS")) {
+            // e.g. OBS="column-header"
+            consume(TokenType::EQUAL, "Expected '=' after OBS");
+            // expect a string
+            Token obsTok = consume(TokenType::STRING, "Expected string after OBS=");
+            printNode->options["OBS"] = obsTok.text;
+        }
+        else if (match("ROUND")) {
+            printNode->options["ROUND"] = "YES";
+        }
+        else if (match("N")) {
+            // N<=¡°string-1¡± <¡°string-2¡±>>
+            // e.g. N="Observations" or N="Observations" "BY group"
+            // For simplicity, let's parse up to two strings
+            if (match(TokenType::EQUAL)) {
+                consume(TokenType::EQUAL, "Expected '=' after N");
+            }
+            // now parse up to two strings
+            Token s1 = consume(TokenType::STRING, "Expected string after N=");
+            std::string combined = s1.text;
+            // optionally parse a second string
+            if (peek().type == TokenType::STRING) {
+                Token s2 = advance();
+                combined += " " + s2.text;
+            }
+            printNode->options["N"] = combined;
+        }
+        else if (match("WIDTH")) {
+            // WIDTH=FULL | MINIMUM | UNIFORM | UNIFORMBY
+            consume(TokenType::EQUAL, "Expected '=' after WIDTH");
+            Token wTok = consume(TokenType::IDENTIFIER, "Expected one of FULL,MINIMUM,UNIFORM,UNIFORMBY after WIDTH=");
+            printNode->options["WIDTH"] = wTok.text;
+        }
+        else if (match("ROWS")) {
+            // ROWS=page-format
+            consume(TokenType::EQUAL, "Expected '=' after ROWS");
+            Token rTok = consume(TokenType::IDENTIFIER, "Expected page-format after ROWS=");
+            printNode->options["ROWS"] = rTok.text;
+        }
+        else if (match("UNIFORM")) {
+            // just a flag
+            printNode->options["UNIFORM"] = "YES";
+        }
+        else if (match("SPLIT")) {
+            // SPLIT='split-char'
+            consume(TokenType::EQUAL, "Expected '=' after SPLIT");
+            Token sTok = consume(TokenType::STRING, "Expected string for SPLIT character");
+            printNode->options["SPLIT"] = sTok.text;
+        }
+        else if (match("DOUBLE")) {
+            printNode->options["DOUBLE"] = "YES";
+        }
+        else if (match("NOOBS")) {
+            printNode->options["NOOBS"] = "YES";
+        }
+        else if (match("BLANKLINE")) {
+            // BLANKLINE=n or BLANKLINE=(COUNT=n STYLE=[...]) etc.
+            // parse the expression after BLANKLINE
+            // For simplicity, let's parse tokens up to next space or semicolon
+            // or parse a parenthesized expression
+            // e.g. BLANKLINE=3 or BLANKLINE=(COUNT=2 STYLE=[color=red])
+            consume(TokenType::EQUAL, "Expected '=' after BLANKLINE");
+            if (match(TokenType::LPAREN)) {
+                // parse (COUNT=n <STYLE=...>)
+                // For brevity, let's just store the raw text
+                std::string raw;
+                raw += "(";
+                // read until we see RParen
+                while (peek().type != TokenType::RPAREN && peek().type != TokenType::SEMICOLON && peek().type != TokenType::EOF_TOKEN) {
+                    raw += advance().text + " ";
+                }
+                // then consume RParen
+                consume(TokenType::RPAREN, "Expected ')' after BLANKLINE=(...)");
+                raw += ")";
+                printNode->options["BLANKLINE"] = raw;
+            }
+            else {
+                // parse a simple number
+                Token numTok = advance(); // hopefully a NUMBER
+                printNode->options["BLANKLINE"] = numTok.text;
+            }
+        }
+        else {
+            // Unrecognized option => maybe skip or throw error
+            // let's do a fallback:
+            Token unknownT = advance();
+            // or throw:
+            // throw std::runtime_error("Unrecognized PROC PRINT option: " + unknownT.text);
         }
     }
 
-    consume(TokenType::SEMICOLON, "Expected ';' to end proc print");
+    // After we see a semicolon, the PROC PRINT statement is complete.
+    // Next we'd expect RUN or next statement, etc. We'll parse that outside.
+
+    // We'll return our node
+    return printNode;
+}
+
+
+std::unique_ptr<ASTNode> Parser::parseProcPrint() {
+    bool foundRun = false;
+    consume(TokenType::KEYWORD_PRINT, "Expected 'PRINT' keyword after 'PROC'");
+
+    auto procPrintNode = parseProcPrintStatement();
 
     // Parse VAR statement (optional)
     if (match(TokenType::KEYWORD_VAR)) {
@@ -1268,8 +1382,13 @@ std::unique_ptr<ASTNode> Parser::parseDatalines() {
 
 std::unique_ptr<DatasetRefNode> Parser::parseDatasetName() {
     // Expect an identifier
-    Token t1 = consume(TokenType::IDENTIFIER, "Expected dataset or libref name");
-    std::string firstName = t1.text;
+    Token t1 = peek();
+    string firstName;
+    if (t1.type == TokenType::IDENTIFIER || t1.is_identifier)
+    {
+        firstName = t1.text;
+        advance();
+    }
 
     // Optionally check for DOT
     if (match(TokenType::DOT)) {

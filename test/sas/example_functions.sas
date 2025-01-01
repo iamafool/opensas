@@ -1,6 +1,15 @@
-options linesize=80 pagesize=60;
-libname mylib 'C:\Data';
 title 'Function Evaluation Example';
+libname mylib "c:\data";
+
+data mylib.in;
+    input x y;
+    datalines;
+4,20
+16,30
+9,15
+25,40
+;
+run;
 
 data mylib.out; 
     set mylib.in; 

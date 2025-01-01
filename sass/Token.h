@@ -127,6 +127,7 @@ struct Token {
     std::string text;
     int line;
     int col;
+    bool is_identifier;
 };
 
 }

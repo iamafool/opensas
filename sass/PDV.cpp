@@ -13,8 +13,8 @@ namespace sass {
         }
         // else push back
         pdvVars.push_back(varDef);
-        pdvValues.push_back(varDef.isNumeric ? Cell(double(-INFINITY))
-            : Cell(flyweight_string("")));
+        pdvValues.push_back(varDef.isNumeric ? Value(double(-INFINITY))
+            : Value(""));
     }
 
     // Return varIndex or -1 if not found
@@ -27,17 +27,17 @@ namespace sass {
         return -1;
     }
 
-    void PDV::setValue(int varIndex, const Cell& val) {
+    void PDV::setValue(int varIndex, const Value& val) {
         if (varIndex < 0 || varIndex >= (int)pdvValues.size()) {
             return; // or throw an error
         }
         pdvValues[varIndex] = val;
     }
 
-    Cell PDV::getValue(int varIndex) const {
+    Value PDV::getValue(int varIndex) const {
         if (varIndex < 0 || varIndex >= (int)pdvValues.size()) {
             // return a missing value
-            return Cell(double(-INFINITY));
+            return Value(double(-INFINITY));
         }
         return pdvValues[varIndex];
     }

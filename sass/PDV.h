@@ -34,12 +34,7 @@ namespace sass {
         // Each variable in the PDV corresponds to one PdvVar. 
         // The order in pdvVars must match the order in pdvValues
         std::vector<PdvVar> pdvVars;
-
-        // Current row values: same size as pdvVars
-        // We store them as 'Cell' (your flyweight_string or double).
-        // If a variable is numeric => we interpret the variant as double
-        // If char => interpret as flyweight_string
-        std::vector<Cell> pdvValues;
+        std::vector<Value> pdvValues;
 
     public:
         // Adds a new variable to the PDV
@@ -50,8 +45,8 @@ namespace sass {
         int findVarIndex(const std::string& name) const;
 
         // Get or set a value by var index
-        void setValue(int varIndex, const Cell& val);
-        Cell getValue(int varIndex) const;
+        void setValue(int varIndex, const Value& val);
+        Value getValue(int varIndex) const;
 
         // Reset non-retained variables to missing. 
         // Called at the start of each iteration, except for the first

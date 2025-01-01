@@ -1,7 +1,4 @@
 #include "Interpreter.h"
-#include "Interpreter.h"
-#include "Interpreter.h"
-#include "Interpreter.h"
 #include "Sorter.h"
 #include <iostream>
 #include <stdexcept>
@@ -142,7 +139,7 @@ void Interpreter::executeDataStepStatement(
     }
     else if (auto keepStmt = dynamic_cast<KeepNode*>(stmt)) {
         std::vector<PdvVar> newVars;
-        std::vector<Cell> newVals;
+        std::vector<Value> newVals;
         for (size_t i = 0; i < pdv.pdvVars.size(); i++) {
             auto& varDef = pdv.pdvVars[i];
             // If varDef.name is in keepStmt->variables, keep it
@@ -184,7 +181,7 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
         const std::string& varName = doc->var_names[c];
         int pdvIndex = pdv.findVarIndex(varName);
         if (pdvIndex >= 0) {
-            doc->values[outRowIndex * doc->var_count + c] = pdv.getValue(pdvIndex);
+            doc->values[outRowIndex * doc->var_count + c] = valueToCell(pdv.getValue(pdvIndex));
         }
         else {
             // missing
@@ -216,6 +213,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
 
     // 2) Build a PDV
     PDV pdv;
+    this->pdv = &pdv;
 
     // We also want to gather any InputNode or DatalinesNode statements
     std::vector<std::pair<std::string, bool>> inputVars; // (varName, isString)
@@ -289,7 +287,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         for (int rowIndex = 0; rowIndex < rowCount; ++rowIndex) {
             // (a) load row from inDoc->values => PDV
             for (int col = 0; col < inDoc->var_count; ++col) {
-                Cell cellVal = inDoc->values[rowIndex * inDoc->var_count + col];
+                Value cellVal = cellToValue(inDoc->values[rowIndex * inDoc->var_count + col]);
                 const std::string& varName = inDoc->var_names[col];
                 int pdvIndex = pdv.findVarIndex(varName);
                 if (pdvIndex >= 0) {
@@ -634,9 +632,9 @@ Value Interpreter::evaluate(ASTNode *node) {
         return strNode->value;
     }
     else if (auto var = dynamic_cast<VariableNode*>(node)) {
-        auto it = env.variables.find(var->varName);
-        if (it != env.variables.end()) {
-            return it->second;
+        int idx = pdv->findVarIndex(var->varName);
+        if (idx >= 0) {
+            return pdv->getValue(idx);
         }
         else {
             // Variable not found, return missing value

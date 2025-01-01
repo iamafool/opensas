@@ -209,22 +209,22 @@ namespace sass {
 			std::string upperNextIdent = nextIdent;
 			for (auto& c : upperNextIdent) c = toupper(c);
 			if (upperNextIdent == "IF") {
-				return Token{ TokenType::KEYWORD_ELSE_IF, "ELSE IF", line, col - (int)nextIdent.size() - 5 };
+				return Token{ TokenType::KEYWORD_ELSE_IF, "ELSE IF", line, col - (int)nextIdent.size() - 5, true };
 			}
 			else {
 				// Not 'ELSE IF', rollback and return 'ELSE'
 				pos = savedPos;
 				col = savedCol;
-				return Token{ TokenType::KEYWORD_ELSE, "ELSE", line, col - (int)ident.size() };
+				return Token{ TokenType::KEYWORD_ELSE, "ELSE", line, col - (int)ident.size(), true };
 			}
 		}
 
 		// Check if it's a keyword
 		if (keywords.find(upperIdent) != keywords.end()) {
-			return Token{ keywords.at(upperIdent), ident, line, static_cast<int>(col - ident.size()) };
+			return Token{ keywords.at(upperIdent), ident, line, static_cast<int>(col - ident.size()), true };
 		}
 		else {
-			return Token{ TokenType::IDENTIFIER, ident, line, static_cast<int>(col - ident.size()) };
+			return Token{ TokenType::IDENTIFIER, ident, line, static_cast<int>(col - ident.size()), true };
 		}
 	}
 
