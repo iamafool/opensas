@@ -22,6 +22,8 @@ namespace sass {
         char peekChar() const;
         char getChar();
         void skipWhitespace();
+        void skipBlockComment();
+        void skipLineComment(bool macro);
         Token number();
         Token stringLiteral();
         Token identifierOrKeyword();
@@ -38,6 +40,8 @@ namespace sass {
         Token readDatalinesContent();
 
         std::unordered_map<std::string, TokenType> keywords;
+
+        bool atStatementStart;
     };
 
 }

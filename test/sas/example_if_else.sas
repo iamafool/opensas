@@ -1,9 +1,15 @@
-options linesize=80 pagesize=60;
-libname mylib 'C:\Data';
-title 'IF-ELSE Example';
+data in;
+    input x y;
+    datalines;
+5 10
+15 20
+10 15
+20 25
+;
+run;
 
-data mylib.out; 
-    set mylib.in; 
+data out; 
+    set in; 
     if x > 10 then do;
         status = 'High';
         y = y * 2;
@@ -15,5 +21,5 @@ data mylib.out;
     output; 
 run;
 
-proc print data=mylib.out;
+proc print data=out;
 run;

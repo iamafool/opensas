@@ -20,7 +20,7 @@ namespace sass {
 		keywords["DUPLICATES"] = TokenType::KEYWORD_DUPLICATES;
 		keywords["ELSE IF"] = TokenType::KEYWORD_ELSE_IF;
 		keywords["ELSE"] = TokenType::KEYWORD_ELSE;
-		keywords["END"] = TokenType::KEYWORD_END;
+		keywords["END"] = TokenType::KEYWORD_ENDDO;
 		keywords["FREQ"] = TokenType::KEYWORD_FREQ;
 		keywords["FROM"] = TokenType::KEYWORD_FROM;
 		keywords["FULL"] = TokenType::KEYWORD_FULL;
@@ -95,6 +95,81 @@ namespace sass {
 			getChar();
 		}
 	}
+
+	void Lexer::skipBlockComment() {
+		// We already know we have '/' '*' at pos, so let's consume them
+		// i.e. pos points to '/', pos+1 is '*'
+		pos += 2;  // skip "/*"
+		col += 2;
+
+		while (pos < input.size()) {
+			// check if we see "*/"
+			if (input[pos] == '*' && (pos + 1 < input.size()) && input[pos + 1] == '/') {
+				// end of comment
+				pos += 2;
+				col += 2;
+				return;
+			}
+			// handle newline
+			if (input[pos] == '\n') {
+				line++;
+				col = 1;
+			}
+			else {
+				col++;
+			}
+			pos++;
+		}
+
+		// If we get here, we reached end of file without "*/"
+		// In real SAS, might consider that an error or continue
+		// We'll just return or throw
+		// throw std::runtime_error("Unterminated block comment /* ... */");
+	}
+
+	void Lexer::skipLineComment(bool macro) {
+	// If macro == false => we saw "*"
+	// If macro == true => we saw "%*"
+
+	// We already know we are on '*' or '%*', so let's skip those chars
+	if (macro) {
+		// skip '%*'
+		pos += 2;
+		col += 2;
+	}
+	else {
+		// skip '*'
+		pos++;
+		col++;
+	}
+
+	// Now we skip until we see a semicolon ';'
+	while (pos < input.size()) {
+		char c = input[pos];
+		if (c == ';') {
+			// We found the end of the comment
+			// In SAS, the semicolon belongs to the comment itself and isn't a statement terminator
+			pos++;
+			col++;
+			return;
+		}
+		// handle newlines for line counting
+		if (c == '\n') {
+			line++;
+			col = 1;
+		}
+		else {
+			col++;
+		}
+		pos++;
+	}
+
+	// If we get here, we reached the end of the file without a semicolon
+	// Real SAS might treat that as the end of comment or error
+	// We'll just return
+	// throw std::runtime_error("Unterminated line comment * ... ;");
+	}
+
 
 	Token Lexer::number() {
 		Token token;
@@ -230,14 +305,53 @@ namespace sass {
 
 
 	Token Lexer::getNextToken() {
+		skipWhitespace();
+
 		// If we're already inDatalinesMode, read all lines until we see a line that is ';'
 		if (inDatalinesMode) {
 			return readDatalinesContent();
 		}
 
-		skipWhitespace();
-
 		char c = peekChar();
+
+		// handle block comment
+		if (c == '/' && (pos + 1 < input.size()) && input[pos + 1] == '*') {
+			skipBlockComment();
+			return getNextToken();
+		}
+
+		// handle line comment "* ... ;"
+		if (c == '*') {
+			if (atStatementStart) {
+				skipLineComment(false);
+				return getNextToken();
+			}
+			else {
+				// It's a multiplication operator, not a comment
+				// produce a Token{ TokenType::STAR, "*", ...}
+				Token starTok;
+				starTok.type = TokenType::STAR; // or however you represent '*'
+				starTok.text = "*";
+				starTok.line = line;
+				starTok.col = col;
+				pos++;
+				col++;
+				atStatementStart = false; // now we're definitely not at start
+				return starTok;
+			}
+		}
+
+		// handle macro comment "%* ... ;"
+		if (c == '%' && (pos + 1 < input.size()) && input[pos + 1] == '*') {
+			if (atStatementStart)
+			{
+				skipLineComment(true);
+				return getNextToken();
+			}
+			else {
+
+			}
+		}
 
 		// If we just saw the 'KEYWORD_DATALINES' token, the *very next* token should be
 		// either SEMICOLON => which triggers inDatalinesMode on the next call
@@ -251,10 +365,28 @@ namespace sass {
 				// Next time getNextToken is called => we set inDatalinesMode = true
 				// Because in SAS, "datalines;" => from next line onward we read data
 				inDatalinesMode = true;
+				atStatementStart = false;
 				return tk;
 			}
 			// else fall through as normal tokens if user typed "datalines X" => error in parser
 		}
+
+		// Maybe c == ';' => produce a SEMICOLON token
+		if (c == ';') {
+			Token semTok;
+			semTok.type = TokenType::SEMICOLON;
+			semTok.text = ";";
+			semTok.line = line;
+			semTok.col = col;
+			pos++;
+			col++;
+			// after we read a semicolon, the next token is start-of-statement
+			atStatementStart = true;
+			return semTok;
+		}
+
+		atStatementStart = false;
+
 
 		// Handle macro statements starting with '%'
 		if (c == '%') {
@@ -273,13 +405,6 @@ namespace sass {
 
 		while (pos < input.size()) {
 			char current = input[pos];
-
-			// Handle comments
-			if (current == '*') {
-				// Skip until the end of the line
-				while (pos < input.size() && input[pos] != '\n') pos++;
-				continue;
-			}
 
 			// Handle multi-character operators
 			if (current == '>' || current == '<' || current == '=' || current == '!') {
@@ -324,7 +449,6 @@ namespace sass {
 				case '/': return Token{ TokenType::DIV, "/", line, col - 1 };
 				case '(': return Token{ TokenType::LPAREN, "(", line, col - 1 };
 				case ')': return Token{ TokenType::RPAREN, ")", line, col - 1 };
-				case ';': return Token{ TokenType::SEMICOLON, ";", line, col - 1 };
 				case ',': return Token{ TokenType::COMMA, ",", line, col - 1 };
 				default: break;
 				}

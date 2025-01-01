@@ -121,12 +121,10 @@ ParseResult Parser::parseStatement() {
 			astNode = parseMerge(); break; // Handle MERGE statements
 		case TokenType::KEYWORD_BY:
 			astNode = parseBy(); break; // Handle BY statements
-		case TokenType::KEYWORD_DO:
-			astNode = parseDoLoop(); break; // Handle DO loops
 		case TokenType::KEYWORD_DOLOOP:
+			astNode = parseDoLoop(); break; // Handle DO loops
+		case TokenType::KEYWORD_DO:
 			astNode = parseDo(); break;
-		case TokenType::KEYWORD_ENDDO:
-			astNode = parseEndDo(); break;
 		case TokenType::IDENTIFIER:
 			astNode = parseAssignment(); break;
 		case TokenType::KEYWORD_IF:
@@ -705,13 +703,13 @@ std::unique_ptr<ASTNode> Parser::parseDoLoop() {
     // Parse the body of the DO loop (a block of statements)
     doLoopNode->body = std::make_unique<BlockNode>();
 
-    while (!match(TokenType::KEYWORD_END) && pos < tokens.size()) {
+    while (!match(TokenType::KEYWORD_ENDDOLOOP) && pos < tokens.size()) {
         auto parseResult = parseStatement();
         if (parseResult.status == ParseStatus::PARSE_SUCCESS)
             doLoopNode->body->statements.push_back(std::move(parseResult.node));
     }
 
-    consume(TokenType::KEYWORD_END, "Expected 'END' to close 'DO' loop");
+    consume(TokenType::KEYWORD_ENDDOLOOP, "Expected 'END' to close 'DO' loop");
     consume(TokenType::SEMICOLON, "Expected ';' after 'END'");
 
     return doLoopNode;
