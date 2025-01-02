@@ -1185,7 +1185,7 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
                     executeBlock(block);
                 }
                 else {
-                    execute(stmt.get());
+                    executeDataStepStatement(stmt.get());
                 }
             }
             return;
@@ -1199,7 +1199,7 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
                 executeBlock(block);
             }
             else {
-                execute(stmt.get());
+                executeDataStepStatement(stmt.get());
             }
         }
     }
@@ -1208,7 +1208,7 @@ void Interpreter::executeIfElse(IfElseIfNode* node) {
 
 void Interpreter::executeBlock(BlockNode* node) {
     for (const auto& stmt : node->statements) {
-        execute(stmt.get());
+        executeDataStepStatement(stmt.get());
     }
 }
 

@@ -59,7 +59,7 @@ namespace sass {
         std::unique_ptr<ASTNode> parseArray();
         std::unique_ptr<ASTNode> parseDo();
         std::unique_ptr<ASTNode> parseEndDo();
-        std::unique_ptr<ASTNode> parseBlock();
+        std::unique_ptr<BlockNode> parseBlock();
         std::unique_ptr<ASTNode> parseFunctionCall();
         std::unique_ptr<ASTNode> parseMerge();
         std::unique_ptr<ASTNode> parseBy();

@@ -573,9 +573,15 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
     consume(TokenType::KEYWORD_THEN, "Expected 'then' after condition");
 
     // Parse 'then' statements
-    // For simplicity, assume a single statement; can be extended to handle blocks
-    auto stmt = parseStatement();
-    if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
+    Token t1 = peek();
+    if (t1.type == TokenType::KEYWORD_DO) {
+        auto block = parseBlock();
+        node->thenStatements = std::move(block->statements);
+    }
+    else {
+        auto stmt = parseStatement();
+        if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
+    }
 
     // Handle multiple 'ELSE IF' branches
     while (peek().type == TokenType::KEYWORD_ELSE_IF) {
@@ -593,15 +599,25 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
     // Handle 'ELSE' branch
     if (peek().type == TokenType::KEYWORD_ELSE) {
         consume(TokenType::KEYWORD_ELSE, "Expected 'else'");
-        auto elseStmt = parseStatement();
-        if (elseStmt.status == ParseStatus::PARSE_SUCCESS) node->elseStatements.push_back(std::move(elseStmt.node));
+        Token t1 = peek();
+        if (t1.type == TokenType::KEYWORD_DO)
+        {
+            auto block = parseBlock();
+            node->elseStatements = std::move(block->statements);
+        }
+        else {
+            auto elseStmt = parseStatement();
+            if (elseStmt.status == ParseStatus::PARSE_SUCCESS) node->elseStatements.push_back(std::move(elseStmt.node));
+
+        }
     }
 
     return node;
 }
 
-std::unique_ptr<ASTNode> Parser::parseBlock() {
+std::unique_ptr<BlockNode> Parser::parseBlock() {
     consume(TokenType::KEYWORD_DO, "Expected 'do' to start a block");
+    consume(TokenType::SEMICOLON, "Expected ';' after 'do'");
     std::vector<std::unique_ptr<ASTNode>> statements;
     while (peek().type != TokenType::KEYWORD_ENDDO && peek().type != TokenType::EOF_TOKEN) {
         auto stmt = parseStatement();

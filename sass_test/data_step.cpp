@@ -307,7 +307,7 @@ run;
     string libPath = env->getLibrary("WORK")->getPath();
     string filename = "out.sas7bdat";
     std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
-    EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+    ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
     auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
