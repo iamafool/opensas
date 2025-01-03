@@ -105,6 +105,8 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
             pdv->setValue(pdvIndex, std::get<double>(val));
         }
         else {
+            // adjust the length for char variable
+            pdv->pdvVars[pdvIndex].length = max(pdv->pdvVars[pdvIndex].length, static_cast<int>(std::get<string>(val).size()));
             pdv->setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
         }
     }
@@ -464,6 +466,13 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
             else {
                 // If there are no existing rows, nothing to do except ensure doc->values is correct size
                 // doc->obs_count=0 => doc->values is 0 sized anyway
+            }
+        }
+        else {
+            auto index = static_cast<int>(it - doc->var_names.begin());
+            if (!pdv.pdvVars[i].isNumeric && doc->var_length[index] != pdv.pdvVars[i].length)
+            {
+                doc->var_length[index] = max(doc->var_length[index], pdv.pdvVars[i].length);
             }
         }
     }
