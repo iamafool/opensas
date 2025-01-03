@@ -552,6 +552,62 @@ run;
 
 }
 
+TEST_F(SassTest, DataStepKeep1) {
+    std::string code = R"(
+data in;
+    input x num1 num2 num3;
+    datalines;
+1 5 10 15
+2 10 15 20
+3 15 20 25
+;
+run;
+
+data out; 
+    set in; 
+    keep x num2;
+run;
+
+proc print data=out;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 3);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 2);
+    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.var_names[0], "x");
+    EXPECT_EQ(sasdoc1.var_names[1], "num2");
+
+    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 10);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 2);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 3);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 20);
+
+}
+
+
 TEST_F(SassTest, DataStepDo1) {
     std::string code = R"(
 data in;

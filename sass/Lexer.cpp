@@ -76,6 +76,7 @@ namespace sass {
 		keywords["WHILE"] = TokenType::KEYWORD_WHILE;
 		keywords["RETAIN"] = TokenType::KEYWORD_RETAIN;
 		keywords["DROP"] = TokenType::KEYWORD_DROP;
+		keywords["KEEP"] = TokenType::KEYWORD_KEEP;
 	}
 
 	char Lexer::peekChar() const {

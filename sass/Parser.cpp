@@ -463,8 +463,9 @@ std::unique_ptr<ASTNode> Parser::parseKeep() {
     // keep var1 var2 ...;
     auto node = std::make_unique<KeepNode>();
     consume(TokenType::KEYWORD_KEEP, "Expected 'keep'");
-    while (peek().type == TokenType::IDENTIFIER) {
-        node->variables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name").text);
+    while (peek().type != TokenType::SEMICOLON) {
+        node->variables.push_back(peek().text);
+        advance();
     }
     consume(TokenType::SEMICOLON, "Expected ';' after keep statement");
     return node;
