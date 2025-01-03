@@ -1,9 +1,14 @@
-options linesize=80 pagesize=60;
-libname mylib 'C:\Data';
-title 'DO Loop Example';
+data in;
+    input x num1 num2 num3;
+    datalines;
+1 5 10 15
+2 10 15 20
+3 15 20 25
+;
+run;
 
-data mylib.out; 
-    set mylib.in; 
+data out; 
+    set in; 
     retain sum 0;
     array nums {3} num1 num2 num3;
     do i = 1 to 3;
@@ -15,5 +20,5 @@ data mylib.out;
     if sum > 25 then output; 
 run;
 
-proc print data=mylib.out;
+proc print data=out;
 run;

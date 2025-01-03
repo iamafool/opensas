@@ -405,3 +405,224 @@ run;
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[11]).get(), "Very High");
 
 }
+
+TEST_F(SassTest, DataStepIfElse3) {
+    std::string code = R"(
+data in;
+    input x y;
+    datalines;
+3 10
+7 15
+12 18
+16 35
+9 20
+;
+run;
+
+data out; 
+    set in; 
+    if x > 15 then do;
+        category = 'Very High';
+        if y > 30 then status = 'Excellent';
+        else status = 'Good';
+    end;
+    else if x > 10 then do;
+        category = 'High';
+        if y > 20 then status = 'Good';
+        else status = 'Fair';
+    end;
+    else if x > 5 then do;
+        category = 'Medium';
+        status = 'Average';
+    end;
+    else do;
+        category = 'Low';
+        status = 'Poor';
+    end;
+    output; 
+run;
+
+proc print data=out;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 3);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 4);
+    EXPECT_EQ(sasdoc1.obs_count, 5);
+    EXPECT_EQ(sasdoc1.var_names[0], "x");
+    EXPECT_EQ(sasdoc1.var_names[1], "y");
+    EXPECT_EQ(sasdoc1.var_names[2], "category");
+    EXPECT_EQ(sasdoc1.var_names[3], "status");
+
+    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 3);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 10);
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Low");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "Poor");
+    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 7);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 15);
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[6]).get(), "Medium");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[7]).get(), "Average");
+    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 12);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 18);
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[10]).get(), "High");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[11]).get(), "Fair");
+    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 16);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 35);
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[14]).get(), "Very High");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[15]).get(), "Excellent");
+    EXPECT_EQ(std::get<double>(sasdoc1.values[16]), 9);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[17]), 20);
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[18]).get(), "Medium");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[19]).get(), "Average");
+
+}
+
+TEST_F(SassTest, DataStepDrop1) {
+    std::string code = R"(
+data in;
+    input x num1 num2 num3;
+    datalines;
+1 5 10 15
+2 10 15 20
+3 15 20 25
+;
+run;
+
+data out; 
+    set in; 
+    drop x num2;
+run;
+
+proc print data=out;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 3);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 2);
+    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.var_names[0], "num1");
+    EXPECT_EQ(sasdoc1.var_names[1], "num3");
+
+    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 5);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 20);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 15);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 25);
+
+}
+
+TEST_F(SassTest, DataStepDo1) {
+    std::string code = R"(
+data in;
+    input x num1 num2 num3;
+    datalines;
+1 5 10 15
+2 10 15 20
+3 15 20 25
+;
+run;
+
+data out; 
+    set in; 
+    retain sum 0;
+    array nums {3} num1 num2 num3;
+    do i = 1 to 3;
+        nums{i} = nums{i} + 10;
+        sum = sum + nums{i};
+    end;
+    drop i;
+    keep x sum num1 num2 num3;
+    if sum > 25 then output; 
+run;
+
+proc print data=out;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 3);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 5);
+    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.var_names[0], "x");
+    EXPECT_EQ(sasdoc1.var_names[1], "num1");
+    EXPECT_EQ(sasdoc1.var_names[1], "num2");
+    EXPECT_EQ(sasdoc1.var_names[2], "num3");
+    EXPECT_EQ(sasdoc1.var_names[3], "sum");
+
+    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 20);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 25);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 60);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 2);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 20);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 25);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 30);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 135);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 3);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 25);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 30);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 35);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[14]), 225);
+
+}

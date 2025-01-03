@@ -451,8 +451,9 @@ std::unique_ptr<ASTNode> Parser::parseDrop() {
     // drop var1 var2 ...;
     auto node = std::make_unique<DropNode>();
     consume(TokenType::KEYWORD_DROP, "Expected 'drop'");
-    while (peek().type == TokenType::IDENTIFIER) {
-        node->variables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name").text);
+    while (peek().type != TokenType::SEMICOLON) {
+        node->variables.push_back(peek().text);
+        advance();
     }
     consume(TokenType::SEMICOLON, "Expected ';' after drop statement");
     return node;

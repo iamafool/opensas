@@ -74,7 +74,8 @@ namespace sass {
 		keywords["VAR"] = TokenType::KEYWORD_VAR;
 		keywords["WHERE"] = TokenType::KEYWORD_WHERE;
 		keywords["WHILE"] = TokenType::KEYWORD_WHILE;
-
+		keywords["RETAIN"] = TokenType::KEYWORD_RETAIN;
+		keywords["DROP"] = TokenType::KEYWORD_DROP;
 	}
 
 	char Lexer::peekChar() const {
@@ -439,7 +440,7 @@ namespace sass {
 			}
 
 			// Handle other single-character operators
-			if (current == '+' || current == '-' || current == '*' || current == '/' || current == '(' || current == ')' || current == ';' || current == ',') {
+			if (current == '+' || current == '-' || current == '*' || current == '/' || current == '(' || current == ')' || current == ';' || current == ',' || current == '{' || current == '}') {
 				pos++;
 				col++;
 				switch (current) {
@@ -449,6 +450,8 @@ namespace sass {
 				case '/': return Token{ TokenType::DIV, "/", line, col - 1 };
 				case '(': return Token{ TokenType::LPAREN, "(", line, col - 1 };
 				case ')': return Token{ TokenType::RPAREN, ")", line, col - 1 };
+				case '{': return Token{ TokenType::LBRACE, "{", line, col - 1 };
+				case '}': return Token{ TokenType::RBRACE, "}", line, col - 1 };
 				case ',': return Token{ TokenType::COMMA, ",", line, col - 1 };
 				default: break;
 				}
