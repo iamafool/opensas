@@ -590,8 +590,16 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
         consume(TokenType::KEYWORD_THEN, "Expected 'then' after 'else if' condition");
 
         std::vector<std::unique_ptr<ASTNode>> elseIfStmts;
-        auto elseIfStmt = parseStatement();
-        if (elseIfStmt.status == ParseStatus::PARSE_SUCCESS) elseIfStmts.push_back(std::move(elseIfStmt.node));
+
+        Token t1 = peek();
+        if (t1.type == TokenType::KEYWORD_DO) {
+            auto block = parseBlock();
+            elseIfStmts = std::move(block->statements);
+        }
+        else {
+            auto stmt = parseStatement();
+            if (stmt.status == ParseStatus::PARSE_SUCCESS) elseIfStmts.push_back(std::move(stmt.node));
+        }
 
         node->elseIfBranches.emplace_back(std::move(elseIfCondition), std::move(elseIfStmts));
     }
