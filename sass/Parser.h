@@ -56,6 +56,9 @@ namespace sass {
         std::unique_ptr<ASTNode> parseDrop();
         std::unique_ptr<ASTNode> parseKeep();
         std::unique_ptr<ASTNode> parseRetain();
+        void parseRetainInitialValues(RetainNode* retainNode);
+        void parseParenInitialValueList(RetainNode* retainNode);
+        std::variant<double, std::string> parseNumberOrString();
         std::unique_ptr<ASTNode> parseArray();
         std::unique_ptr<ASTNode> parseDo();
         std::unique_ptr<ASTNode> parseEndDo();

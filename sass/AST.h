@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <optional>
 #include "Library.h"
 
 namespace sass {
@@ -173,7 +174,20 @@ namespace sass {
     // Represents a RETAIN statement: retain var1 var2 ...;
     class RetainNode : public ASTNode {
     public:
-        std::vector<std::string> variables;
+        // Each element could be (varName, optional<initialValue>)
+        // Where initialValue could itself be a variant<double, std::string>.
+        struct RetainElement {
+            std::string varName;
+            std::optional<Value> initialValue; // or variant
+        };
+
+        std::vector<RetainElement> elements;
+
+        bool allFlag = false;       // if we saw _ALL_
+        bool charFlag = false;      // if we saw _CHAR_
+        bool numericFlag = false;   // if we saw _NUMERIC_
+
+        // Possibly more for arrays
     };
 
 

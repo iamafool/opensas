@@ -149,9 +149,7 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
         pdv->pdvValues = newVals;
     }
     else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
-        for (auto& var : retainStmt->variables) {
-            pdv->setRetainFlag(var, true);
-        }
+        executeRetain(retainStmt);
     }
     // else handle other statements: array, do loops, merges, etc.
     else {
@@ -685,11 +683,47 @@ void Interpreter::executeKeep(KeepNode* node) {
 
 // Execute a RETAIN statement
 void Interpreter::executeRetain(RetainNode* node) {
-    for (const auto& var : node->variables) {
-        retainVars.push_back(var);
-        logLogger.info("Retained variable '{}'.", var);
+    // For each element, we mark the variable as retained
+    // 1) If it's _ALL_, then all existing variables are retained
+    // 2) If it's _CHAR_, we retain all existing character vars
+    // 3) If it's _NUMERIC_, we retain all existing numeric vars
+    // 4) Otherwise, we do by name.
+
+    if (node->allFlag) {
+        //for (auto& pair : env.variables) {
+        //    retainedVariables.insert(pair.first);
+        //}
+    }
+    if (node->charFlag) {
+        //for (auto& pair : env.variables) {
+        //    if (isStringVar(pair.first)) {
+        //        retainedVariables.insert(pair.first);
+        //    }
+        //}
+    }
+    if (node->numericFlag) {
+        //for (auto& pair : env.variables) {
+        //    if (isNumericVar(pair.first)) {
+        //        retainedVariables.insert(pair.first);
+        //    }
+        //}
+    }
+    // For normal elements
+    for (auto& elem : node->elements) {
+        // if variable does not exist yet, we might create it in env with missing
+        // then mark it as retained
+        //if (!env.hasVariable(elem.varName)) {
+        //    env.setVariable(elem.varName, std::nan(""));
+        //}
+        //retainedVariables.insert(elem.varName);
+
+        // If there's an initial value, we set it once
+        if (elem.initialValue.has_value()) {
+            env.setVariable(elem.varName, elem.initialValue.value());
+        }
     }
 }
+
 
 // Execute an ARRAY statement
 void Interpreter::executeArray(ArrayNode* node) {

@@ -406,11 +406,9 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
 }
 
 int Parser::getPrecedence(const std::string& op) const {
-    if (op == "=") return -1;
-
     if (op == "or") return 1;
     if (op == "and") return 2;
-    if (op == "==" || op == "!=" || op == ">" || op == "<" || op == ">=" || op == "<=") return 3;
+    if (op == "=" || op == "!=" || op == ">" || op == "<" || op == ">=" || op == "<=") return 3;
     if (op == "+" || op == "-") return 4;
     if (op == "*" || op == "/") return 5;
     if (op == "**") return 6;
@@ -471,17 +469,144 @@ std::unique_ptr<ASTNode> Parser::parseKeep() {
     return node;
 }
 
+// RETAIN var1 var2 ... (val1 val2) ... ;
 std::unique_ptr<ASTNode> Parser::parseRetain() {
-    // retain var1 var2 ...;
+    consume(TokenType::KEYWORD_RETAIN, "Expected 'RETAIN'");
     auto node = std::make_unique<RetainNode>();
-    consume(TokenType::KEYWORD_RETAIN, "Expected 'retain'");
-    while (peek().type == TokenType::IDENTIFIER) {
-        node->variables.push_back(consume(TokenType::IDENTIFIER, "Expected variable name").text);
+
+    // We'll parse one or more variable references
+    // Possibly followed by parentheses with initial values
+
+    while (true) {
+        Token t = peek();
+        if (t.type == TokenType::SEMICOLON || t.type == TokenType::EOF_TOKEN) {
+            break; // end of statement
+        }
+
+        if (t.type == TokenType::IDENTIFIER) {
+            // e.g. we see "x" or "_ALL_" or a variable name
+            auto varTok = advance();
+            RetainNode::RetainElement elem;
+            elem.varName = varTok.text;
+            node->elements.push_back(std::move(elem));
+
+            // After seeing a variable, we might see a single numeric or string token 
+            // that sets initial value. e.g. retain x 0;
+            // or we might see parentheses. So let's check:
+            parseRetainInitialValues(node.get());
+        }
+        // If we see '(' => we parse initial values
+        else if (t.type == TokenType::LPAREN) {
+            // If we see '(' right after another variable set, 
+            // we parse a parentheses list of initial values
+            parseRetainInitialValues(node.get());
+        }
+        else {
+            // If it's not identifier or LPAREN, 
+            // maybe it's _ALL_, _CHAR_, _NUMERIC_, etc. 
+            // or we just advance if not recognized
+            advance();
+        }
     }
-    consume(TokenType::SEMICOLON, "Expected ';' after retain statement");
+
+    consume(TokenType::SEMICOLON, "Expected ';' after RETAIN statement");
     return node;
 }
 
+void Parser::parseRetainInitialValues(RetainNode* retainNode) {
+    // This function looks at the next token(s):
+    // If the next token is '(' => parse a parenthesized list of initial values
+    // If the next token is a numeric or string => parse a single initial value
+    // Otherwise, do nothing
+
+    Token t = peek();
+    if (t.type == TokenType::LPAREN) {
+        // parse a list like (1 2 'abc')
+        parseParenInitialValueList(retainNode);
+    }
+    else if (t.type == TokenType::NUMBER || t.type == TokenType::STRING) {
+        // parse a single initial value e.g. 0 or 'XYZ'
+        // apply it to the most recent variable that doesn't have an init value
+
+        if (!retainNode->elements.empty()) {
+            // get the last variable
+            auto& lastElem = retainNode->elements.back();
+            if (!lastElem.initialValue.has_value()) {
+                // parseNumberOrString is a helper to get 
+                // a variant<double,std::string> from the current token
+                lastElem.initialValue = parseNumberOrString();
+            }
+        }
+    }
+    else {
+        // not parentheses or a direct initial token => do nothing
+        return;
+    }
+}
+
+void Parser::parseParenInitialValueList(RetainNode* retainNode) {
+    // We assume we are at '('
+    consume(TokenType::LPAREN, "Expected '(' in RETAIN initial value list");
+
+    // We'll store the parsed initial values in a temporary vector
+    std::vector<std::variant<double, std::string>> initVals;
+
+    // parse values until we see ')'
+    while (peek().type != TokenType::RPAREN && peek().type != TokenType::EOF_TOKEN) {
+        if (peek().type == TokenType::NUMBER || peek().type == TokenType::STRING) {
+            auto val = parseNumberOrString();
+            initVals.push_back(val);
+        }
+        else if (peek().type == TokenType::COMMA) {
+            advance(); // skip comma
+        }
+        else {
+            // not a recognized value => break or skip
+            break;
+        }
+    }
+
+    consume(TokenType::RPAREN, "Expected ')' after RETAIN initial values");
+
+    // Now we apply these initVals to the preceding variables that don't have initialValue yet
+    // The RETAIN doc says: "SAS matches the first value in the list with the first variable in the preceding list of elements, the second with the second, etc."
+
+    // We'll do "back-fill" from the last parsed variables that don't have an init. 
+    // But typically we match in the order the variables were declared. 
+    // We'll do from left to right in the 'elements' but only for those that do not have initialValue.
+
+    size_t initIndex = 0;
+    for (auto& elem : retainNode->elements) {
+        if (!elem.initialValue.has_value()) {
+            if (initIndex < initVals.size()) {
+                elem.initialValue = initVals[initIndex];
+                initIndex++;
+            }
+            else {
+                // no more init values => remain none
+            }
+        }
+    }
+    // If there are more init values than variables, SAS warns. 
+    // You could optionally store a parser warning or skip them.
+    // if (initIndex < initVals.size()) { 
+    //   // some leftover values => in real SAS, we do a note/warning
+    // }
+}
+
+std::variant<double, std::string> Parser::parseNumberOrString() {
+    Token t = advance(); // consume the current token
+    if (t.type == TokenType::NUMBER) {
+        // convert to double
+        double val = std::stod(t.text);
+        return val;
+    }
+    else if (t.type == TokenType::STRING) {
+        return t.text; // store raw string
+    }
+    // fallback => throw error or return 0.0
+    throw std::runtime_error("Expected numeric or string token for initial value in RETAIN");
+}
 
 std::unique_ptr<ASTNode> Parser::parseArray() {
     // array <arrayName>{<size>} <var1> <var2> ...;

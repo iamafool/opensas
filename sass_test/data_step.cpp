@@ -124,7 +124,6 @@ TEST_F(SassTest, DataStepOutput2) {
 
 }
 
-
 TEST_F(SassTest, DataStepInput1) {
     std::string code = R"(
         data employees;
