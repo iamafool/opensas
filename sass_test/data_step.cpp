@@ -652,9 +652,9 @@ run;
     EXPECT_EQ(sasdoc1.obs_count, 3);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[1], "num2");
-    EXPECT_EQ(sasdoc1.var_names[2], "num3");
-    EXPECT_EQ(sasdoc1.var_names[3], "sum");
+    EXPECT_EQ(sasdoc1.var_names[2], "num2");
+    EXPECT_EQ(sasdoc1.var_names[3], "num3");
+    EXPECT_EQ(sasdoc1.var_names[4], "sum");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 5);

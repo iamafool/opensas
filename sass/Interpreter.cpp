@@ -123,34 +123,6 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
 
         }
     }
-    else if (auto dropStmt = dynamic_cast<DropNode*>(stmt)) {
-        for (auto& varName : dropStmt->variables) {
-            int idx = pdv->findVarIndex(varName);
-            if (idx >= 0) {
-                pdv->pdvVars.erase(pdv->pdvVars.begin() + idx);
-                pdv->pdvValues.erase(pdv->pdvValues.begin() + idx);
-            }
-        }
-    }
-    else if (auto keepStmt = dynamic_cast<KeepNode*>(stmt)) {
-        std::vector<PdvVar> newVars;
-        std::vector<Value> newVals;
-        for (size_t i = 0; i < pdv->pdvVars.size(); i++) {
-            auto& varDef = pdv->pdvVars[i];
-            // If varDef.name is in keepStmt->variables, keep it
-            if (std::find(keepStmt->variables.begin(), keepStmt->variables.end(),
-                varDef.name) != keepStmt->variables.end())
-            {
-                newVars.push_back(varDef);
-                newVals.push_back(pdv->pdvValues[i]);
-            }
-        }
-        pdv->pdvVars = newVars;
-        pdv->pdvValues = newVals;
-    }
-    else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
-        executeRetain(retainStmt);
-    }
     // else handle other statements: array, do loops, merges, etc.
     else {
         // fallback
@@ -237,6 +209,34 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         {
             executeSetStatement(set, node);
         }
+        else if (auto dropStmt = dynamic_cast<DropNode*>(stmt)) {
+            for (auto& varName : dropStmt->variables) {
+                int idx = this->pdv->findVarIndex(varName);
+                if (idx >= 0) {
+                    this->pdv->pdvVars.erase(this->pdv->pdvVars.begin() + idx);
+                    this->pdv->pdvValues.erase(this->pdv->pdvValues.begin() + idx);
+                }
+            }
+        }
+        else if (auto keepStmt = dynamic_cast<KeepNode*>(stmt)) {
+            std::vector<PdvVar> newVars;
+            std::vector<Value> newVals;
+            for (size_t i = 0; i < this->pdv->pdvVars.size(); i++) {
+                auto& varDef = this->pdv->pdvVars[i];
+                // If varDef.name is in keepStmt->variables, keep it
+                if (std::find(keepStmt->variables.begin(), keepStmt->variables.end(),
+                    varDef.name) != keepStmt->variables.end())
+                {
+                    newVars.push_back(varDef);
+                    newVals.push_back(this->pdv->pdvValues[i]);
+                }
+            }
+            this->pdv->pdvVars = newVars;
+            this->pdv->pdvValues = newVals;
+        }
+        else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
+            executeRetain(retainStmt);
+        }
         else {
             // It's not input or datalines, so store it in dataStepStmts
             dataStepStmts.push_back(stmt);
@@ -261,12 +261,17 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             );
         }
 
-        // Initialize PDV from inDoc
-        pdv.initFromSasDoc(inDoc.get());
-
         // We'll iterate over each row in inDoc
         int rowCount = inDoc->obs_count;
+        bool firstIteration = true;
         for (int rowIndex = 0; rowIndex < rowCount; ++rowIndex) {
+            if (!firstIteration) {
+                pdv.resetNonRetained();
+            }
+            else {
+                firstIteration = false;
+            }
+
             // load row from inDoc->values => PDV
             for (int col = 0; col < inDoc->var_count; ++col) {
                 Value cellVal = cellToValue(inDoc->values[rowIndex * inDoc->var_count + col]);
@@ -289,9 +294,6 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             if (!node->hasOutput) {
                 appendPdvRowToSasDoc(pdv, outDoc.get());
             }
-
-            // resetNonRetained for next iteration
-            pdv.resetNonRetained();
         }
     }
     else {
@@ -645,7 +647,7 @@ Value Interpreter::evaluate(ASTNode *node) {
         else if (op == "<") return (l < r) ? 1.0 : 0.0;
         else if (op == ">=") return (l >= r) ? 1.0 : 0.0;
         else if (op == "<=") return (l <= r) ? 1.0 : 0.0;
-        else if (op == "==") return (l == r) ? 1.0 : 0.0;
+        else if (op == "=") return (l == r) ? 1.0 : 0.0;
         else if (op == "!=") return (l != r) ? 1.0 : 0.0;
         else if (op == "and") return ((l != 0.0) && (r != 0.0)) ? 1.0 : 0.0;
         else if (op == "or") return ((l != 0.0) || (r != 0.0)) ? 1.0 : 0.0;
@@ -683,43 +685,64 @@ void Interpreter::executeKeep(KeepNode* node) {
 
 // Execute a RETAIN statement
 void Interpreter::executeRetain(RetainNode* node) {
-    // For each element, we mark the variable as retained
-    // 1) If it's _ALL_, then all existing variables are retained
-    // 2) If it's _CHAR_, we retain all existing character vars
-    // 3) If it's _NUMERIC_, we retain all existing numeric vars
-    // 4) Otherwise, we do by name.
 
+    // 1) If _ALL_ => mark all
     if (node->allFlag) {
-        //for (auto& pair : env.variables) {
-        //    retainedVariables.insert(pair.first);
-        //}
+        for (auto& var : pdv->pdvVars) {
+            var.retained = true;
+        }
     }
+    // 2) If _CHAR_ => mark all char
     if (node->charFlag) {
-        //for (auto& pair : env.variables) {
-        //    if (isStringVar(pair.first)) {
-        //        retainedVariables.insert(pair.first);
-        //    }
-        //}
+        for (auto& var : pdv->pdvVars) {
+            if (!var.isNumeric) {
+                var.retained = true;
+            }
+        }
     }
+    // 3) If _NUMERIC_ => mark all numeric
     if (node->numericFlag) {
-        //for (auto& pair : env.variables) {
-        //    if (isNumericVar(pair.first)) {
-        //        retainedVariables.insert(pair.first);
-        //    }
-        //}
+        for (auto& var : pdv->pdvVars) {
+            if (var.isNumeric) {
+                var.retained = true;
+            }
+        }
     }
-    // For normal elements
-    for (auto& elem : node->elements) {
-        // if variable does not exist yet, we might create it in env with missing
-        // then mark it as retained
-        //if (!env.hasVariable(elem.varName)) {
-        //    env.setVariable(elem.varName, std::nan(""));
-        //}
-        //retainedVariables.insert(elem.varName);
 
-        // If there's an initial value, we set it once
+    // 4) For each element in node->elements
+    for (auto& elem : node->elements) {
+        bool guessNumeric = true;
         if (elem.initialValue.has_value()) {
-            env.setVariable(elem.varName, elem.initialValue.value());
+            // check if it's double or string
+            if (std::holds_alternative<std::string>(*elem.initialValue)) {
+                guessNumeric = false;
+            }
+        }
+
+        int pdvIndex = pdv->findVarIndex(elem.varName);
+        if (pdvIndex < 0) {
+            // If not found, add new variable to PDV
+            PdvVar newVar;
+            newVar.name = elem.varName;
+            newVar.isNumeric = guessNumeric;
+            if (!newVar.isNumeric)
+                newVar.length = std::get<std::string>(elem.initialValue.value()).size();
+            pdv->addVariable(newVar);
+            pdvIndex = pdv->findVarIndex(elem.varName);
+        }
+
+        // mark as retained
+        pdv->pdvVars[pdvIndex].retained = true;
+
+        // if there's an initial value, set pdvValues[idx]
+        if (elem.initialValue.has_value()) {
+            auto& initVal = *elem.initialValue;
+            if (std::holds_alternative<double>(initVal)) {
+                pdv->pdvValues[pdvIndex] = std::get<double>(initVal);
+            }
+            else {
+                pdv->pdvValues[pdvIndex] = std::get<std::string>(initVal);
+            }
         }
     }
 }
@@ -2299,6 +2322,17 @@ void Interpreter::executeSetStatement(SetStatementNode* node, DataStepNode* data
     for (auto& dsName : node->dataSets) {
         // e.g. "a_in.dm"
         dataStepNode->inputDataSets.push_back(dsName);
+
+        auto inDocPtr = env.getOrCreateDataset(dsName);
+        auto inDoc = std::dynamic_pointer_cast<SasDoc>(inDocPtr);
+        if (!inDoc) {
+            throw std::runtime_error(
+                "Input dataset '" + dsName.getFullDsName() + "' not found or not a SasDoc."
+            );
+        }
+
+        // Initialize PDV from inDoc
+        pdv->initFromSasDoc(inDoc.get());
     }
 }
 }

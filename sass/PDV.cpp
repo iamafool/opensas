@@ -50,7 +50,7 @@ namespace sass {
                     pdvValues[i] = double(-INFINITY);
                 }
                 else {
-                    pdvValues[i] = flyweight_string("");
+                    pdvValues[i] = "";
                 }
             }
         }
@@ -65,11 +65,6 @@ namespace sass {
 
     // Suppose we want to build the PDV from the SasDoc¡¯s var_* vectors
     void PDV::initFromSasDoc(SasDoc* doc) {
-        // doc->var_count, doc->var_names, doc->var_formats, etc.
-        // Clear existing PDV
-        pdvVars.clear();
-        pdvValues.clear();
-
         for (int i = 0; i < doc->var_count; i++) {
             PdvVar vdef;
             vdef.name = doc->var_names[i];
