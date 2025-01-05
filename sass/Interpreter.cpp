@@ -59,9 +59,6 @@ void Interpreter::execute(ASTNode *node) {
     else if (auto ifElseIf = dynamic_cast<IfElseIfNode*>(node)) {
         executeIfElse(ifElseIf);
     }
-    else if (auto arrayNode = dynamic_cast<ArrayNode*>(node)) {
-        executeArray(arrayNode);
-    }
     else if (auto mergeNode = dynamic_cast<MergeStatementNode*>(node)) {
         executeMerge(mergeNode);
     }
@@ -87,28 +84,7 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
     // We'll do small examples:
 
     if (auto assign = dynamic_cast<AssignmentNode*>(stmt)) {
-        // Evaluate
-        Value val = evaluate(assign->expression.get());
-        int pdvIndex = pdv->findVarIndex(assign->varName);
-        if (pdvIndex < 0) {
-            // If not found, add new variable to PDV
-            PdvVar newVar;
-            newVar.name = assign->varName;
-            newVar.isNumeric = std::holds_alternative<double>(val);
-            if (!newVar.isNumeric)
-                newVar.length = std::get<std::string>(val).size();
-            pdv->addVariable(newVar);
-            pdvIndex = pdv->findVarIndex(assign->varName);
-        }
-        // Convert Value => Cell
-        if (std::holds_alternative<double>(val)) {
-            pdv->setValue(pdvIndex, std::get<double>(val));
-        }
-        else {
-            // adjust the length for char variable
-            pdv->pdvVars[pdvIndex].length = max(pdv->pdvVars[pdvIndex].length, static_cast<int>(std::get<string>(val).size()));
-            pdv->setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
-        }
+        executeAssignment(assign);
     }
     else if (auto ifThen = dynamic_cast<IfElseIfNode*>(stmt)) {
         executeIfElse(ifThen);
@@ -180,6 +156,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     PDV pdv;
     this->pdv = &pdv;
     this->doc = outDoc.get();
+    arrays.clear();
 
     // We also want to gather any InputNode or DatalinesNode statements
     std::vector<std::pair<std::string, bool>> inputVars; // (varName, isString)
@@ -236,6 +213,9 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         }
         else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
             executeRetain(retainStmt);
+        }
+        else if (auto arrayNode = dynamic_cast<ArrayNode*>(stmt)) {
+            executeArray(arrayNode);
         }
         else {
             // It's not input or datalines, so store it in dataStepStmts
@@ -481,9 +461,42 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
 
 // Execute an assignment statement
 void Interpreter::executeAssignment(AssignmentNode *node) {
+    // Evaluate
     Value val = evaluate(node->expression.get());
-    env.setVariable(node->varName, val);
-    logLogger.info("Assigned {} = {}", node->varName, toString(val));
+    auto varNode = dynamic_cast<VariableNode*>(node->lhs.get());
+    string varName;
+    if (varNode)
+    {
+        varName = varNode->varName;
+    }
+    else {
+        auto arrayElemNode = dynamic_cast<ArrayElementNode*>(node->lhs.get());
+        if (arrayElemNode)
+        {
+            varName = getArrayElemName(arrayElemNode);
+        }
+    }
+
+    int pdvIndex = pdv->findVarIndex(varName);
+    if (pdvIndex < 0) {
+        // If not found, add new variable to PDV
+        PdvVar newVar;
+        newVar.name = varName;
+        newVar.isNumeric = std::holds_alternative<double>(val);
+        if (!newVar.isNumeric)
+            newVar.length = std::get<std::string>(val).size();
+        pdv->addVariable(newVar);
+        pdvIndex = pdv->findVarIndex(varName);
+    }
+    // Convert Value => Cell
+    if (std::holds_alternative<double>(val)) {
+        pdv->setValue(pdvIndex, std::get<double>(val));
+    }
+    else {
+        // adjust the length for char variable
+        pdv->pdvVars[pdvIndex].length = max(pdv->pdvVars[pdvIndex].length, static_cast<int>(std::get<string>(val).size()));
+        pdv->setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
+    }
 }
 
 // Execute an IF-THEN statement
@@ -777,9 +790,9 @@ Value Interpreter::getArrayElement(const std::string& arrayName, int index) {
         throw std::runtime_error("Array index out of bounds for array: " + arrayName);
     }
     std::string varName = arrays[arrayName][index - 1];
-    auto it = env.currentRow.columns.find(varName);
-    if (it != env.currentRow.columns.end()) {
-        return it->second;
+    auto idx = pdv->findVarIndex(varName);
+    if (idx >= 0) {
+        return pdv->getValue(idx);
     }
     else {
         // Variable not found, assume missing value represented as 0 or empty string
@@ -2335,5 +2348,35 @@ void Interpreter::executeSetStatement(SetStatementNode* node, DataStepNode* data
         pdv->initFromSasDoc(inDoc.get());
     }
 }
+
+std::string Interpreter::getArrayElemName(ArrayElementNode* elemNode)
+{
+    // 1) Evaluate the index expression => must be numeric
+    Value idxVal = evaluate(elemNode->index.get());
+    double idxNum = toNumber(idxVal);
+
+    // 2) Round or cast to int. In SAS-like array references, typically 1-based
+    int idx = static_cast<int>(idxNum);
+
+    // 3) Check if arrayName exists in arrays
+    auto it = arrays.find(elemNode->arrayName);
+    if (it == arrays.end()) {
+        throw std::runtime_error("Undefined array: " + elemNode->arrayName);
+    }
+
+    // 4) Retrieve the vector of variable names
+    std::vector<std::string>& varList = it->second;
+
+    // 5) Check index bounds (assuming 1-based)
+    if (idx < 1 || idx > static_cast<int>(varList.size())) {
+        throw std::runtime_error("Array index out of bounds for array: "
+            + elemNode->arrayName
+            + " subscript=" + std::to_string(idx));
+    }
+
+    // 6) Return the variable name (subtract 1 for 0-based vector indexing)
+    return varList[idx - 1];
+}
+
 }
 

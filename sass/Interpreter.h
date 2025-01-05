@@ -94,6 +94,7 @@ namespace sass {
         // Helper methods for array operations
         Value getArrayElement(const std::string& arrayName, int index);
         void setArrayElement(const std::string& arrayName, int index, const Value& value);
+        std::string getArrayElemName(ArrayElementNode* elemNode);
 
         // SQL execution helpers
         Dataset* executeSelect(const SelectStatementNode* selectStmt);

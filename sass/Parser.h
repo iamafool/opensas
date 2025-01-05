@@ -47,6 +47,7 @@ namespace sass {
         std::unique_ptr<ASTNode> parseOptions();
         std::unique_ptr<ASTNode> parseLibname();
         std::unique_ptr<ASTNode> parseTitle();
+        std::unique_ptr<ASTNode> parseLeftValue();
         std::unique_ptr<ASTNode> parseProc();
         std::unique_ptr<ASTNode> parseAssignment();
         std::unique_ptr<ASTNode> parseIfElseIf();
@@ -88,6 +89,7 @@ namespace sass {
 
         // Expression parsing with precedence
         std::unique_ptr<ASTNode> parseExpression(int precedence = 0);
+        std::unique_ptr<ArrayElementNode> parseArrayElement();
         std::unique_ptr<ASTNode> parsePrimary();
         int getPrecedence(const std::string& op) const;
 

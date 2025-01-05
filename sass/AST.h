@@ -62,8 +62,8 @@ namespace sass {
     // Represents a variable assignment: var = expression;
     class AssignmentNode : public ASTNode {
     public:
-        std::string varName;
-        std::unique_ptr<ASTNode> expression;
+        std::unique_ptr<ASTNode> lhs;  // left-hand side, can be VariableNode or ArrayElementNode
+        std::unique_ptr<ASTNode> expression; // right-hand side
     };
 
     // Represents a literal number or string

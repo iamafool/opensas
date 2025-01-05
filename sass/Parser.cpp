@@ -293,14 +293,41 @@ std::unique_ptr<ASTNode> Parser::parseTitle() {
     return node;
 }
 
+std::unique_ptr<ASTNode> Parser::parseLeftValue() {
+    // Expect identifier (the array name or variable name)
+    Token t = consume(TokenType::IDENTIFIER, "Expected variable or array name");
+
+    // Peek to see if next token is '{'
+    if (peek().type == TokenType::LBRACE) {
+        // parse array element
+        auto arrElem = std::make_unique<ArrayElementNode>();
+        arrElem->arrayName = t.text;
+
+        consume(TokenType::LBRACE, "Expected '{' after array name");
+        arrElem->index = parseExpression(); // parse the subscript expression
+        consume(TokenType::RBRACE, "Expected '}' after array subscript");
+
+        return arrElem;
+    }
+    else {
+        // Otherwise it's a simple variable
+        auto varNode = std::make_unique<VariableNode>(t.text);
+        return varNode;
+    }
+}
+
 std::unique_ptr<ASTNode> Parser::parseAssignment() {
-    // var = expr;
-    auto node = std::make_unique<AssignmentNode>();
-    node->varName = consume(TokenType::IDENTIFIER, "Expected variable name").text;
-    consume(TokenType::EQUAL, "Expected '='");
-    node->expression = parseExpression();
+    // LHS can be a variable or array-element node
+    auto assignNode = std::make_unique<AssignmentNode>();
+
+    // parse the left-value
+    assignNode->lhs = parseLeftValue();
+
+    consume(TokenType::EQUAL, "Expected '=' in assignment");
+    assignNode->expression = parseExpression();
+
     consume(TokenType::SEMICOLON, "Expected ';' after assignment");
-    return node;
+    return assignNode;
 }
 
 std::unique_ptr<ASTNode> Parser::parseIfThen() {
@@ -363,6 +390,30 @@ std::unique_ptr<ASTNode> Parser::parseExpression(int precedence) {
     return left;
 }
 
+std::unique_ptr<ArrayElementNode> Parser::parseArrayElement() {
+    auto arrayElement = std::make_unique<ArrayElementNode>();
+    arrayElement->arrayName = consume(TokenType::IDENTIFIER, "Expected array name").text;
+    Token t = peek();
+    if (t.type == TokenType::LBRACKET)
+    {
+        consume(TokenType::LBRACKET, "Expected '[' after array name");
+    }
+    else {
+        consume(TokenType::LBRACE, "Expected '{' after array name");
+    }
+    arrayElement->index = parseExpression();
+    if (t.type == TokenType::LBRACKET)
+    {
+        consume(TokenType::RBRACKET, "Expected ']' after array index");
+    }
+    else
+    {
+        consume(TokenType::RBRACE, "Expected '}' after array index");
+    }
+
+    return arrayElement;
+}
+
 std::unique_ptr<ASTNode> Parser::parsePrimary() {
     Token t = peek();
     if (t.type == TokenType::NUMBER) {
@@ -379,13 +430,8 @@ std::unique_ptr<ASTNode> Parser::parsePrimary() {
             return parseFunctionCall();
         }
         // Check if it's an array element reference
-        else if (tokens.size() > pos + 1 && tokens[pos + 1].type == TokenType::LBRACKET) {
-            auto arrayElement = std::make_unique<ArrayElementNode>();
-            arrayElement->arrayName = consume(TokenType::IDENTIFIER, "Expected array name").text;
-            consume(TokenType::LBRACKET, "Expected '[' after array name");
-            arrayElement->index = parseExpression();
-            consume(TokenType::RBRACKET, "Expected ']' after array index");
-            return arrayElement;
+        else if (tokens.size() > pos + 1 && (tokens[pos + 1].type == TokenType::LBRACKET || tokens[pos + 1].type == TokenType::LBRACE)) {
+            return parseArrayElement();
         }
         else {
             advance();
