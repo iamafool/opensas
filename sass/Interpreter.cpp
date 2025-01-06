@@ -99,7 +99,10 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
 
         }
     }
-    // else handle other statements: array, do loops, merges, etc.
+    else if (auto doStmt = dynamic_cast<DoNode*>(stmt))
+    {
+        executeDo(doStmt);
+    }
     else {
         // fallback
     }
@@ -829,87 +832,38 @@ void Interpreter::executeDo(DoNode* node) {
     logLogger.info("Starting DO loop: {} = {} to {} by {}", node->loopVar, start, end, increment);
 
     // Initialize loop variable
-    env.currentRow.columns[node->loopVar] = start;
+    PdvVar vdef;
+    vdef.name = node->loopVar;
+    vdef.isNumeric = true;
+    pdv->addVariable(vdef);
+    int idx = pdv->findVarIndex(node->loopVar);
+    pdv->setValue(idx, start);
 
     // Loop
     if (increment > 0) {
-        while (env.currentRow.columns[node->loopVar].index() == 0 && std::get<double>(env.currentRow.columns[node->loopVar]) <= end) {
+        while (std::get<double>(pdv->getValue(idx)) <= end) {
             // Execute loop statements
             for (const auto& stmt : node->statements) {
-                if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
-                    executeAssignment(assign);
-                }
-                else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
-                    executeIfThen(ifThen);
-                }
-                else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
-                    executeOutput(out);
-                }
-                else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
-                    executeDrop(drop);
-                }
-                else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
-                    executeKeep(keep);
-                }
-                else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
-                    executeRetain(retain);
-                }
-                else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
-                    executeArray(array);
-                }
-                else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
-                    executeDo(doNode);
-                }
-                else {
-                    // Handle other DATA step statements if needed
-                    throw std::runtime_error("Unsupported statement in DO loop.");
-                }
+                executeDataStepStatement(stmt.get());
             }
 
             // Increment loop variable
-            double currentVal = toNumber(env.currentRow.columns[node->loopVar]);
+            double currentVal = toNumber(pdv->getValue(idx));
             currentVal += increment;
-            env.currentRow.columns[node->loopVar] = currentVal;
+            pdv->setValue(idx, currentVal);
         }
     }
     else if (increment < 0) {
-        while (env.currentRow.columns[node->loopVar].index() == 0 && std::get<double>(env.currentRow.columns[node->loopVar]) >= end) {
+        while (std::get<double>(pdv->getValue(idx)) >= end) {
             // Execute loop statements
             for (const auto& stmt : node->statements) {
-                if (auto assign = dynamic_cast<AssignmentNode*>(stmt.get())) {
-                    executeAssignment(assign);
-                }
-                else if (auto ifThen = dynamic_cast<IfThenNode*>(stmt.get())) {
-                    executeIfThen(ifThen);
-                }
-                else if (auto out = dynamic_cast<OutputNode*>(stmt.get())) {
-                    executeOutput(out);
-                }
-                else if (auto drop = dynamic_cast<DropNode*>(stmt.get())) {
-                    executeDrop(drop);
-                }
-                else if (auto keep = dynamic_cast<KeepNode*>(stmt.get())) {
-                    executeKeep(keep);
-                }
-                else if (auto retain = dynamic_cast<RetainNode*>(stmt.get())) {
-                    executeRetain(retain);
-                }
-                else if (auto array = dynamic_cast<ArrayNode*>(stmt.get())) {
-                    executeArray(array);
-                }
-                else if (auto doNode = dynamic_cast<DoNode*>(stmt.get())) {
-                    executeDo(doNode);
-                }
-                else {
-                    // Handle other DATA step statements if needed
-                    throw std::runtime_error("Unsupported statement in DO loop.");
-                }
+                executeDataStepStatement(stmt.get());
             }
 
             // Increment loop variable
-            double currentVal = toNumber(env.currentRow.columns[node->loopVar]);
+            double currentVal = toNumber(pdv->getValue(idx));
             currentVal += increment;
-            env.currentRow.columns[node->loopVar] = currentVal;
+            pdv->setValue(idx, currentVal);
         }
     }
     else {

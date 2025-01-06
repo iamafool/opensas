@@ -121,10 +121,10 @@ ParseResult Parser::parseStatement() {
 			astNode = parseMerge(); break; // Handle MERGE statements
 		case TokenType::KEYWORD_BY:
 			astNode = parseBy(); break; // Handle BY statements
-		case TokenType::KEYWORD_DOLOOP:
-			astNode = parseDoLoop(); break; // Handle DO loops
 		case TokenType::KEYWORD_DO:
 			astNode = parseDo(); break;
+		case TokenType::KEYWORD_DOLOOP:
+			astNode = parseDoLoop(); break; // Handle DO loops
 		case TokenType::IDENTIFIER:
 			astNode = parseAssignment(); break;
 		case TokenType::KEYWORD_IF:

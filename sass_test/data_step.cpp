@@ -756,6 +756,82 @@ run;
 
 data out; 
     set in; 
+    do i = 1 to 3;
+        num1 = num1 + i;
+        num2 = num2 + i * 2;
+        num3 = num3 + i * 3;
+        sum = num1 + num2 + num3;
+    end;
+run;
+
+proc print data=out;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 3);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 6);
+    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.var_names[0], "x");
+    EXPECT_EQ(sasdoc1.var_names[1], "num1");
+    EXPECT_EQ(sasdoc1.var_names[2], "num2");
+    EXPECT_EQ(sasdoc1.var_names[3], "num3");
+    EXPECT_EQ(sasdoc1.var_names[4], "i");
+    EXPECT_EQ(sasdoc1.var_names[5], "sum");
+
+    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 11);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 22);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 33);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 4);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 66);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 2);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 16);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 27);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 38);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 4);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 81);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 3);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 21);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[14]), 32);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[15]), 43);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[16]), 4);
+    EXPECT_EQ(std::get<double>(sasdoc1.values[17]), 96);
+
+}
+
+TEST_F(SassTest, DataStepDo2) {
+    std::string code = R"(
+data in;
+    input x num1 num2 num3;
+    datalines;
+1 5 10 15
+2 10 15 20
+3 15 20 25
+;
+run;
+
+data out; 
+    set in; 
     retain sum 0;
     array nums {3} num1 num2 num3;
     do i = 1 to 3;
