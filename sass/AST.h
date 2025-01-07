@@ -52,6 +52,8 @@ namespace sass {
     // Represents a DATA step block: data <dataset>; set <source>; <statements>; run;
     class DataStepNode : public ASTNode {
     public:
+        std::vector<std::string> dropList;
+        std::vector<std::string> keepList;
         DatasetRefNode outputDataSet; // e.g., mylib.out
         DatasetRefNode inputDataSet;  // e.g., mylib.in
         std::vector<std::unique_ptr<ASTNode>> statements;

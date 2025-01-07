@@ -33,6 +33,7 @@ namespace sass {
         DataEnvironment& env;
         PDV* pdv = nullptr;
         SasDoc* doc = nullptr;
+        DataStepNode* dsNode = nullptr;
         spdlog::logger& lstLogger;
         // Add a member variable to hold arrays
         std::unordered_map<std::string, std::vector<std::string>> arrays;

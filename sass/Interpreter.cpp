@@ -1,4 +1,5 @@
 #include "Interpreter.h"
+#include "Interpreter.h"
 #include "Sorter.h"
 #include <iostream>
 #include <stdexcept>
@@ -110,34 +111,121 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
 
 
 void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
-{
-    // Step 1: sync new PDV columns to doc
-    syncPdvColumnsToSasDoc(pdv, doc);
+   {
+       // We do NOT rename PDV variables. We only skip them for output.
 
-    // We'll increment doc->obs_count
-    int outRowIndex = doc->obs_count;
-    doc->obs_count++;
-    // Make sure doc->values is big enough
-    doc->values.resize(doc->var_count * doc->obs_count);
+       // Step 1: figure out which PDV variables should appear in output
+       // E.g. build a list of "outputVars"
+       std::vector<int> outVarIndexes; // indexes in pdv.pdvVars
+       for (int i = 0; i < (int)pdv.pdvVars.size(); i++) {
+           const std::string& name = pdv.pdvVars[i].name;
 
-    // For each variable in doc->var_names / doc->var_count
-    for (int c = 0; c < doc->var_count; c++) {
-        const std::string& varName = doc->var_names[c];
-        int pdvIndex = pdv.findVarIndex(varName);
-        if (pdvIndex >= 0) {
-            doc->values[outRowIndex * doc->var_count + c] = valueToCell(pdv.getValue(pdvIndex));
-        }
-        else {
-            // missing
-            if (doc->var_types[c] == READSTAT_TYPE_STRING) {
-                doc->values[outRowIndex * doc->var_count + c] = flyweight_string("");
-            }
-            else {
-                doc->values[outRowIndex * doc->var_count + c] = double(-INFINITY);
-            }
-        }
-    }
-}
+           // Check drop/keep logic
+           bool isDropped =
+               (!dsNode->dropList.empty() &&
+                   std::find(dsNode->dropList.begin(), dsNode->dropList.end(), name) != dsNode->dropList.end());
+           bool isKept =
+               (dsNode->keepList.empty() || // if keep is empty, that means keep all
+                   std::find(dsNode->keepList.begin(), dsNode->keepList.end(), name) != dsNode->keepList.end()
+                   );
+
+           if (!isDropped && isKept) {
+               outVarIndexes.push_back(i);
+           }
+       }
+
+       // Now for each such variable, ensure doc->var_names has it
+       // This ensures doc->var_count == number of output variables, not PDV size
+       // We'll build a local map: varName -> outputColIndex
+       std::unordered_map<std::string, int> varNameToOutCol;
+       for (int idx : outVarIndexes) {
+           const std::string& pdvVarName = pdv.pdvVars[idx].name;
+
+           // see if doc->var_names already has it
+           auto it = std::find(doc->var_names.begin(), doc->var_names.end(), pdvVarName);
+           if (it == doc->var_names.end()) {
+               // We have a new output column
+               doc->var_names.push_back(pdvVarName);
+               if (pdv.pdvVars[idx].isNumeric) {
+                   doc->var_types.push_back(READSTAT_TYPE_DOUBLE);
+               }
+               else {
+                   doc->var_types.push_back(READSTAT_TYPE_STRING);
+               }
+               doc->var_labels.push_back("");
+               doc->var_formats.push_back("");
+               doc->var_length.push_back(pdv.pdvVars[idx].isNumeric ? 8 : pdv.pdvVars[idx].length);
+               doc->var_display_length.push_back(8);
+               doc->var_decimals.push_back(0);
+
+               doc->var_count = (int)doc->var_names.size();
+               // new column => we must expand doc->values for previous rows too
+               if (doc->obs_count > 0) {
+                   // Expand existing rows with missing values in new col
+                   std::vector<Cell> oldVals = doc->values;
+                   doc->values.resize(doc->var_count * doc->obs_count);
+
+                   for (int r = doc->obs_count - 1; r >= 0; r--) {
+                       // copy row backward
+                       // old row had (doc->var_count - 1) columns
+                       for (int c = 0; c < doc->var_count - 1; c++) {
+                           doc->values[r * doc->var_count + c] =
+                               oldVals[r * (doc->var_count - 1) + c];
+                       }
+                       // fill the new column with missing
+                       if (pdv.pdvVars[idx].isNumeric) {
+                           doc->values[r * doc->var_count + (doc->var_count - 1)] = double(-INFINITY);
+                       }
+                       else {
+                           doc->values[r * doc->var_count + (doc->var_count - 1)] = flyweight_string("");
+                       }
+                   }
+               }
+               int newColPos = doc->var_count - 1;
+               varNameToOutCol[pdvVarName] = newColPos;
+           }
+           else {
+               int colIndex = (int)std::distance(doc->var_names.begin(), it);
+               varNameToOutCol[pdvVarName] = colIndex;
+           }
+       }
+
+       // Step 2: Add a new row to doc->values
+       int outRowIndex = doc->obs_count;
+       doc->obs_count++;
+
+       // Expand doc->values to hold one more row * doc->var_count columns
+       // We'll do a bigger reallocation:
+       std::vector<Cell> oldVals = doc->values;
+       doc->values.resize(doc->var_count * doc->obs_count);
+
+       // copy old rows forward
+       for (int r = 0; r < outRowIndex; r++) {
+           for (int c = 0; c < doc->var_count; c++) {
+               doc->values[r * doc->var_count + c] = oldVals[r * doc->var_count + c];
+           }
+       }
+
+       // Fill the new row with missing
+       for (int c = 0; c < doc->var_count; c++) {
+           if (doc->var_types[c] == READSTAT_TYPE_DOUBLE) {
+               doc->values[outRowIndex * doc->var_count + c] = double(-INFINITY);
+           }
+           else {
+               doc->values[outRowIndex * doc->var_count + c] = flyweight_string("");
+           }
+       }
+
+       // Step 3: copy PDV values for outVarIndexes => doc columns
+       for (int pdvIndex : outVarIndexes) {
+           const std::string& pdvVarName = pdv.pdvVars[pdvIndex].name;
+           // find the doc-> column
+           int col = varNameToOutCol[pdvVarName];
+           // get PDV value
+           Cell cval = valueToCell(pdv.getValue(pdvIndex));
+           doc->values[outRowIndex * doc->var_count + col] = cval;
+       }
+   }
 
 
 // Execute a DATA step
@@ -159,6 +247,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     PDV pdv;
     this->pdv = &pdv;
     this->doc = outDoc.get();
+    this->dsNode = node;
     arrays.clear();
 
     // We also want to gather any InputNode or DatalinesNode statements
@@ -191,28 +280,13 @@ void Interpreter::executeDataStep(DataStepNode* node) {
         }
         else if (auto dropStmt = dynamic_cast<DropNode*>(stmt)) {
             for (auto& varName : dropStmt->variables) {
-                int idx = this->pdv->findVarIndex(varName);
-                if (idx >= 0) {
-                    this->pdv->pdvVars.erase(this->pdv->pdvVars.begin() + idx);
-                    this->pdv->pdvValues.erase(this->pdv->pdvValues.begin() + idx);
-                }
+                node->dropList.push_back(varName);
             }
         }
         else if (auto keepStmt = dynamic_cast<KeepNode*>(stmt)) {
-            std::vector<PdvVar> newVars;
-            std::vector<Value> newVals;
-            for (size_t i = 0; i < this->pdv->pdvVars.size(); i++) {
-                auto& varDef = this->pdv->pdvVars[i];
-                // If varDef.name is in keepStmt->variables, keep it
-                if (std::find(keepStmt->variables.begin(), keepStmt->variables.end(),
-                    varDef.name) != keepStmt->variables.end())
-                {
-                    newVars.push_back(varDef);
-                    newVals.push_back(this->pdv->pdvValues[i]);
-                }
+            for (auto& varName : keepStmt->variables) {
+                node->keepList.push_back(varName);
             }
-            this->pdv->pdvVars = newVars;
-            this->pdv->pdvValues = newVals;
         }
         else if (auto retainStmt = dynamic_cast<RetainNode*>(stmt)) {
             executeRetain(retainStmt);
