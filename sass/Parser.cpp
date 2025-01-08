@@ -152,7 +152,6 @@ std::unique_ptr<ASTNode> Parser::parseLengthStatement() {
         // Check if it's a character variable (indicated by $)
         std::string lengthStr;
         if (match(TokenType::DOLLAR)) {
-            advance(); // Consume $
             Token lenToken = consume(TokenType::NUMBER, "Expected numeric value for character length after '$' in LENGTH statement");
             lengthStr = "$" + lenToken.text;
         }
@@ -172,7 +171,6 @@ std::unique_ptr<ASTNode> Parser::parseLengthStatement() {
         }
     }
 
-    consume(TokenType::SEMICOLON, "Expected ';' at the end of LENGTH statement");
     return lengthNode;
 }
 
@@ -393,8 +391,8 @@ std::unique_ptr<ASTNode> Parser::parseIfThen() {
     consume(TokenType::KEYWORD_THEN, "Expected 'then'");
 
     // Parse a single statement after then (for simplicity)
-    auto stmt = parseStatement();
-    if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
+    auto stmt = parseDataStepStatements();
+    if (stmt) node->thenStatements.push_back(std::move(stmt));
 
     return node;
 }
@@ -755,8 +753,8 @@ std::unique_ptr<ASTNode> Parser::parseDo() {
 
     // Parse nested statements until 'enddo;'
     while (peek().type != TokenType::KEYWORD_ENDDO && peek().type != TokenType::EOF_TOKEN) {
-        auto stmt = parseStatement();
-        if (stmt.status == ParseStatus::PARSE_SUCCESS) node->statements.push_back(std::move(stmt.node));
+        auto stmt = parseDataStepStatements();
+        if (stmt) node->statements.push_back(std::move(stmt));
     }
 
     consume(TokenType::KEYWORD_ENDDO, "Expected 'enddo'");
@@ -779,14 +777,14 @@ std::unique_ptr<ASTNode> Parser::parseIfElse() {
 
     // Parse 'then' statements
     // For simplicity, assume a single statement; can be extended to handle blocks
-    auto stmt = parseStatement();
-    if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
+    auto stmt = parseDataStepStatements();
+    if (stmt) node->thenStatements.push_back(std::move(stmt));
 
     // Check for 'else'
     if (peek().type == TokenType::KEYWORD_ELSE) {
         consume(TokenType::KEYWORD_ELSE, "Expected 'else'");
-        auto elseStmt = parseStatement();
-        if (elseStmt.status == ParseStatus::PARSE_SUCCESS) node->elseStatements.push_back(std::move(elseStmt.node));
+        auto elseStmt = parseDataStepStatements();
+        if (elseStmt) node->elseStatements.push_back(std::move(elseStmt));
     }
 
     return node;
@@ -807,8 +805,8 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
         node->thenStatements = std::move(block->statements);
     }
     else {
-        auto stmt = parseStatement();
-        if (stmt.status == ParseStatus::PARSE_SUCCESS) node->thenStatements.push_back(std::move(stmt.node));
+        auto stmt = parseDataStepStatements();
+        if (stmt) node->thenStatements.push_back(std::move(stmt));
     }
 
     // Handle multiple 'ELSE IF' branches
@@ -825,8 +823,8 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
             elseIfStmts = std::move(block->statements);
         }
         else {
-            auto stmt = parseStatement();
-            if (stmt.status == ParseStatus::PARSE_SUCCESS) elseIfStmts.push_back(std::move(stmt.node));
+            auto stmt = parseDataStepStatements();
+            if (stmt) elseIfStmts.push_back(std::move(stmt));
         }
 
         node->elseIfBranches.emplace_back(std::move(elseIfCondition), std::move(elseIfStmts));
@@ -842,8 +840,8 @@ std::unique_ptr<ASTNode> Parser::parseIfElseIf() {
             node->elseStatements = std::move(block->statements);
         }
         else {
-            auto elseStmt = parseStatement();
-            if (elseStmt.status == ParseStatus::PARSE_SUCCESS) node->elseStatements.push_back(std::move(elseStmt.node));
+            auto elseStmt = parseDataStepStatements();
+            if (elseStmt) node->elseStatements.push_back(std::move(elseStmt));
 
         }
     }
@@ -856,8 +854,8 @@ std::unique_ptr<BlockNode> Parser::parseBlock() {
     consume(TokenType::SEMICOLON, "Expected ';' after 'do'");
     std::vector<std::unique_ptr<ASTNode>> statements;
     while (peek().type != TokenType::KEYWORD_ENDDO && peek().type != TokenType::EOF_TOKEN) {
-        auto stmt = parseStatement();
-        if (stmt.status == ParseStatus::PARSE_SUCCESS) statements.push_back(std::move(stmt.node));
+        auto stmt = parseDataStepStatements();
+        if (stmt) statements.push_back(std::move(stmt));
     }
     consume(TokenType::KEYWORD_ENDDO, "Expected 'enddo' to close the block");
     consume(TokenType::SEMICOLON, "Expected ';' after 'enddo'");
@@ -956,9 +954,9 @@ std::unique_ptr<ASTNode> Parser::parseDoLoop() {
     doLoopNode->body = std::make_unique<BlockNode>();
 
     while (!match(TokenType::KEYWORD_ENDDOLOOP) && pos < tokens.size()) {
-        auto parseResult = parseStatement();
-        if (parseResult.status == ParseStatus::PARSE_SUCCESS)
-            doLoopNode->body->statements.push_back(std::move(parseResult.node));
+        auto parseResult = parseDataStepStatements();
+        if (parseResult)
+            doLoopNode->body->statements.push_back(std::move(parseResult));
     }
 
     consume(TokenType::KEYWORD_ENDDOLOOP, "Expected 'END' to close 'DO' loop");
