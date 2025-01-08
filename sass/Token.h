@@ -19,6 +19,7 @@ namespace sass {
         KEYWORD_OUTPUT,
         KEYWORD_INPUT,
         KEYWORD_DATALINES,
+        KEYWORD_LENGTH,
         DATALINES_CONTENT,
         KEYWORD_RUN,
         KEYWORD_OPTIONS,

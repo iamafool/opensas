@@ -1,9 +1,13 @@
-options linesize=80 pagesize=60;
-libname mylib 'C:\Data';
-title 'Built-in String Functions Example';
+data in;
+    length name $40;
+    name="Alice"; output;
+    name="  Bob  "; output;
+    name="Charlie  "; output;
+    name="Dana"; output;
+run;
 
-data mylib.out; 
-    set mylib.in; 
+data out; 
+    set in; 
     first_part = substr(name, 1, 3);
     trimmed = trim(name);
     upper_name = upcase(name);
@@ -11,5 +15,5 @@ data mylib.out;
     output; 
 run;
 
-proc print data=mylib.out;
+proc print data=out;
 run;

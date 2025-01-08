@@ -112,85 +112,10 @@ void Interpreter::executeDataStepStatement(ASTNode* stmt)
 
 void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
    {
-       // We do NOT rename PDV variables. We only skip them for output.
+        // sync new PDV columns to doc
+        syncPdvColumnsToSasDoc(pdv, doc);
 
-       // Step 1: figure out which PDV variables should appear in output
-       // E.g. build a list of "outputVars"
-       std::vector<int> outVarIndexes; // indexes in pdv.pdvVars
-       for (int i = 0; i < (int)pdv.pdvVars.size(); i++) {
-           const std::string& name = pdv.pdvVars[i].name;
-
-           // Check drop/keep logic
-           bool isDropped =
-               (!dsNode->dropList.empty() &&
-                   std::find(dsNode->dropList.begin(), dsNode->dropList.end(), name) != dsNode->dropList.end());
-           bool isKept =
-               (dsNode->keepList.empty() || // if keep is empty, that means keep all
-                   std::find(dsNode->keepList.begin(), dsNode->keepList.end(), name) != dsNode->keepList.end()
-                   );
-
-           if (!isDropped && isKept) {
-               outVarIndexes.push_back(i);
-           }
-       }
-
-       // Now for each such variable, ensure doc->var_names has it
-       // This ensures doc->var_count == number of output variables, not PDV size
-       // We'll build a local map: varName -> outputColIndex
-       std::unordered_map<std::string, int> varNameToOutCol;
-       for (int idx : outVarIndexes) {
-           const std::string& pdvVarName = pdv.pdvVars[idx].name;
-
-           // see if doc->var_names already has it
-           auto it = std::find(doc->var_names.begin(), doc->var_names.end(), pdvVarName);
-           if (it == doc->var_names.end()) {
-               // We have a new output column
-               doc->var_names.push_back(pdvVarName);
-               if (pdv.pdvVars[idx].isNumeric) {
-                   doc->var_types.push_back(READSTAT_TYPE_DOUBLE);
-               }
-               else {
-                   doc->var_types.push_back(READSTAT_TYPE_STRING);
-               }
-               doc->var_labels.push_back("");
-               doc->var_formats.push_back("");
-               doc->var_length.push_back(pdv.pdvVars[idx].isNumeric ? 8 : pdv.pdvVars[idx].length);
-               doc->var_display_length.push_back(8);
-               doc->var_decimals.push_back(0);
-
-               doc->var_count = (int)doc->var_names.size();
-               // new column => we must expand doc->values for previous rows too
-               if (doc->obs_count > 0) {
-                   // Expand existing rows with missing values in new col
-                   std::vector<Cell> oldVals = doc->values;
-                   doc->values.resize(doc->var_count * doc->obs_count);
-
-                   for (int r = doc->obs_count - 1; r >= 0; r--) {
-                       // copy row backward
-                       // old row had (doc->var_count - 1) columns
-                       for (int c = 0; c < doc->var_count - 1; c++) {
-                           doc->values[r * doc->var_count + c] =
-                               oldVals[r * (doc->var_count - 1) + c];
-                       }
-                       // fill the new column with missing
-                       if (pdv.pdvVars[idx].isNumeric) {
-                           doc->values[r * doc->var_count + (doc->var_count - 1)] = double(-INFINITY);
-                       }
-                       else {
-                           doc->values[r * doc->var_count + (doc->var_count - 1)] = flyweight_string("");
-                       }
-                   }
-               }
-               int newColPos = doc->var_count - 1;
-               varNameToOutCol[pdvVarName] = newColPos;
-           }
-           else {
-               int colIndex = (int)std::distance(doc->var_names.begin(), it);
-               varNameToOutCol[pdvVarName] = colIndex;
-           }
-       }
-
-       // Step 2: Add a new row to doc->values
+       // Add a new row to doc->values
        int outRowIndex = doc->obs_count;
        doc->obs_count++;
 
@@ -199,33 +124,24 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
        std::vector<Cell> oldVals = doc->values;
        doc->values.resize(doc->var_count * doc->obs_count);
 
-       // copy old rows forward
-       for (int r = 0; r < outRowIndex; r++) {
-           for (int c = 0; c < doc->var_count; c++) {
-               doc->values[r * doc->var_count + c] = oldVals[r * doc->var_count + c];
-           }
-       }
-
-       // Fill the new row with missing
+       // For each variable in doc->var_names / doc->var_count
        for (int c = 0; c < doc->var_count; c++) {
-           if (doc->var_types[c] == READSTAT_TYPE_DOUBLE) {
-               doc->values[outRowIndex * doc->var_count + c] = double(-INFINITY);
+           const std::string& varName = doc->var_names[c];
+           int pdvIndex = pdv.findVarIndex(varName);
+           if (pdvIndex >= 0) {
+               doc->values[outRowIndex * doc->var_count + c] = valueToCell(pdv.getValue(pdvIndex));
            }
            else {
-               doc->values[outRowIndex * doc->var_count + c] = flyweight_string("");
+               // missing
+               if (doc->var_types[c] == READSTAT_TYPE_STRING) {
+                   doc->values[outRowIndex * doc->var_count + c] = flyweight_string("");
+               }
+               else {
+                   doc->values[outRowIndex * doc->var_count + c] = double(-INFINITY);
+               }
            }
        }
-
-       // Step 3: copy PDV values for outVarIndexes => doc columns
-       for (int pdvIndex : outVarIndexes) {
-           const std::string& pdvVarName = pdv.pdvVars[pdvIndex].name;
-           // find the doc-> column
-           int col = varNameToOutCol[pdvVarName];
-           // get PDV value
-           Cell cval = valueToCell(pdv.getValue(pdvIndex));
-           doc->values[outRowIndex * doc->var_count + col] = cval;
-       }
-   }
+}
 
 
 // Execute a DATA step
@@ -462,16 +378,37 @@ void Interpreter::executeDataStep(DataStepNode* node) {
 
 void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
 {
+    // Step 1: figure out which PDV variables should appear in output
+    // E.g. build a list of "outputVars"
+    std::vector<int> outVarIndexes; // indexes in pdv.pdvVars
+    for (int i = 0; i < (int)pdv.pdvVars.size(); i++) {
+        const std::string& name = pdv.pdvVars[i].name;
+
+        // Check drop/keep logic
+        bool isDropped =
+            (!dsNode->dropList.empty() &&
+                std::find(dsNode->dropList.begin(), dsNode->dropList.end(), name) != dsNode->dropList.end());
+        bool isKept =
+            (dsNode->keepList.empty() || // if keep is empty, that means keep all
+                std::find(dsNode->keepList.begin(), dsNode->keepList.end(), name) != dsNode->keepList.end()
+                );
+
+        if (!isDropped && isKept) {
+            outVarIndexes.push_back(i);
+        }
+    }
+
     // For each PdvVar in pdv, see if doc->var_names already has it
-    for (size_t i = 0; i < pdv.pdvVars.size(); i++) {
-        const std::string& pdvVarName = pdv.pdvVars[i].name;
+    for (size_t i = 0; i != outVarIndexes.size(); i++) {
+        auto pdv_index = outVarIndexes[i];
+        const std::string& pdvVarName = pdv.pdvVars[pdv_index].name;
         // search doc->var_names
         auto it = std::find(doc->var_names.begin(), doc->var_names.end(), pdvVarName);
         if (it == doc->var_names.end()) {
             // We have a new column
             doc->var_names.push_back(pdvVarName);
             // guess var_types: if isNumeric => READSTAT_TYPE_DOUBLE else READSTAT_TYPE_STRING
-            if (pdv.pdvVars[i].isNumeric) {
+            if (pdv.pdvVars[pdv_index].isNumeric) {
                 doc->var_types.push_back(READSTAT_TYPE_DOUBLE);
             }
             else {
@@ -481,7 +418,7 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
             // Optionally define var_labels, var_formats, var_length etc. For now we do minimal:
             doc->var_labels.push_back("");
             doc->var_formats.push_back("");
-            doc->var_length.push_back(pdv.pdvVars[i].length <= 0 ? 8 : pdv.pdvVars[i].length);
+            doc->var_length.push_back(pdv.pdvVars[pdv_index].length <= 0 ? 8 : pdv.pdvVars[pdv_index].length);
             doc->var_display_length.push_back(8); // arbitrary
             doc->var_decimals.push_back(0);
 
@@ -512,7 +449,7 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
                         doc->values[r * newVarCount + c] = oldValues[r * (newVarCount - 1) + c];
                     }
                     // fill the new column with missing
-                    if (pdv.pdvVars[i].isNumeric) {
+                    if (pdv.pdvVars[pdv_index].isNumeric) {
                         doc->values[r * newVarCount + (newVarCount - 1)] = double(-INFINITY);
                     }
                     else {
@@ -527,9 +464,9 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
         }
         else {
             auto index = static_cast<int>(it - doc->var_names.begin());
-            if (!pdv.pdvVars[i].isNumeric && doc->var_length[index] != pdv.pdvVars[i].length)
+            if (!pdv.pdvVars[pdv_index].isNumeric && doc->var_length[index] != pdv.pdvVars[pdv_index].length)
             {
-                doc->var_length[index] = max(doc->var_length[index], pdv.pdvVars[i].length);
+                doc->var_length[index] = max(doc->var_length[index], pdv.pdvVars[pdv_index].length);
             }
         }
     }
@@ -840,7 +777,6 @@ void Interpreter::executeRetain(RetainNode* node) {
 
 // Execute an ARRAY statement
 void Interpreter::executeArray(ArrayNode* node) {
-    logLogger.info("Executing ARRAY declaration: {}", node->arrayName);
     // Validate array size
     if (node->size != static_cast<int>(node->variables.size())) {
         throw std::runtime_error("Array size does not match the number of variables.");
@@ -848,15 +784,6 @@ void Interpreter::executeArray(ArrayNode* node) {
 
     // Store the array in the interpreter's array map
     arrays[node->arrayName] = node->variables;
-
-    logLogger.info("Array '{}' with size {} and variables: {}", node->arrayName, node->size,
-        [&]() -> std::string {
-            std::string vars;
-            for (const auto& var : node->variables) {
-                vars += var + " ";
-            }
-            return vars;
-        }());
 }
 
 Value Interpreter::getArrayElement(const std::string& arrayName, int index) {
@@ -903,8 +830,6 @@ void Interpreter::executeDo(DoNode* node) {
         increment = toNumber(incVal);
     }
 
-    logLogger.info("Starting DO loop: {} = {} to {} by {}", node->loopVar, start, end, increment);
-
     // Initialize loop variable
     PdvVar vdef;
     vdef.name = node->loopVar;
@@ -943,8 +868,6 @@ void Interpreter::executeDo(DoNode* node) {
     else {
         throw std::runtime_error("DO loop increment cannot be zero.");
     }
-
-    logLogger.info("Completed DO loop: {} reached {}", node->loopVar, env.currentRow.columns[node->loopVar].index() == 0 ? toString(env.currentRow.columns[node->loopVar]) : "unknown");
 }
 
 void Interpreter::executeProcSort(ProcSortNode* node) {

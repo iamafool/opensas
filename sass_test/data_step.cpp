@@ -262,6 +262,81 @@ run;
     EXPECT_NEAR(std::get<double>(sasdoc1.values[4]), 3.4011973817, 1e-7);
 }
 
+TEST_F(SassTest, DataStepFunction2) {
+    std::string code = R"(
+data in;
+    length name $40;
+    name="Alice"; output;
+    name="  Bob  "; output;
+    name="Charlie  "; output;
+    name="Dana"; output;
+run;
+
+data out; 
+    set in; 
+    first_part = substr(name, 1, 3);
+    trimmed = trim(name);
+    upper_name = upcase(name);
+    lower_name = lowcase(name);
+    output; 
+run;
+
+proc print data=out;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 3);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 5);
+    EXPECT_EQ(sasdoc1.obs_count, 4);
+    EXPECT_EQ(sasdoc1.var_names[0], "name");
+    EXPECT_EQ(sasdoc1.var_names[1], "first_part");
+    EXPECT_EQ(sasdoc1.var_names[2], "trimmed");
+    EXPECT_EQ(sasdoc1.var_names[3], "upper_name");
+    EXPECT_EQ(sasdoc1.var_names[4], "lower_name");
+
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "Alice");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "Ali");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Alice");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "ALICE");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[4]).get(), "alice");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[5]).get(), "  Bob  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[6]).get(), "  B");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[7]).get(), "  Bob");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[8]).get(), "  BOB  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[9]).get(), "  bob  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[10]).get(), "Charlie  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[11]).get(), "Cha");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[12]).get(), "Charlie");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[13]).get(), "CHARLIE  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[14]).get(), "charlie  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[15]).get(), "Dana");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[16]).get(), "Dan");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[17]).get(), "Dana");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[18]).get(), "DANA");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[19]).get(), "dana");
+
+}
+
 TEST_F(SassTest, DataStepIfElse1) {
     std::string code = R"(
 data in;

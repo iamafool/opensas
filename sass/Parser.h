@@ -27,6 +27,7 @@ namespace sass {
 
         std::unique_ptr<ASTNode> parse();
         std::unique_ptr<ProgramNode> parseProgram(); // To handle multiple global and data statements
+        std::unique_ptr<ASTNode> parseDataStepStatements();
         ParseResult parseStatement();
 
     private:
@@ -65,6 +66,7 @@ namespace sass {
         std::unique_ptr<ASTNode> parseEndDo();
         std::unique_ptr<BlockNode> parseBlock();
         std::unique_ptr<ASTNode> parseFunctionCall();
+        std::unique_ptr<ASTNode> parseLengthStatement();
         std::unique_ptr<ASTNode> parseMerge();
         std::unique_ptr<ASTNode> parseBy();
         std::unique_ptr<ASTNode> parseDoLoop();

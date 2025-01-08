@@ -371,5 +371,13 @@ namespace sass {
     public:
         std::vector<std::string> lines;  // the raw lines
     };
+
+    class LengthStatementNode : public ASTNode {
+    public:
+        // Vector of pairs (variable name, length)
+        // Length is stored as string to handle both character (e.g., $20) and numeric (e.g., 8) lengths
+        std::vector<std::pair<std::string, std::string>> lengths;
+    };
+
 }
 #endif // AST_H
