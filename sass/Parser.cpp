@@ -971,8 +971,7 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
 
     // Parse DATA= option
     if (match(TokenType::KEYWORD_DATA)) {
-        consume(TokenType::KEYWORD_DATA, "Expected 'DATA=' option in PROC SORT");
-
+        consume(TokenType::EQUAL, "Expected '=' after 'data'");
         auto dsNode = parseDatasetName();
         procSortNode->inputDataSet = *dsNode;
     }
@@ -982,18 +981,20 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
 
     // Parse OUT= option (optional)
     if (match(TokenType::KEYWORD_OUT)) {
-        consume(TokenType::KEYWORD_OUT, "Expected 'OUT=' option in PROC SORT");
+        consume(TokenType::EQUAL, "Expected '=' after 'out'");
         auto dsNode = parseDatasetName();
         procSortNode->outputDataSet = *dsNode;
     }
 
+    consume(TokenType::SEMICOLON, "Expected ';' to end 'PROC SORT' statement");
+
     // Parse BY statement
     if (match(TokenType::KEYWORD_BY)) {
-        consume(TokenType::KEYWORD_BY, "Expected 'BY' keyword in PROC SORT");
         while (peek().type == TokenType::IDENTIFIER) {
             Token varToken = consume(TokenType::IDENTIFIER, "Expected variable name in BY statement");
             procSortNode->byVariables.push_back(varToken.text);
         }
+        consume(TokenType::SEMICOLON, "Expected ';' to end 'BY' statement");
     }
     else {
         throw std::runtime_error("PROC SORT requires a BY statement");

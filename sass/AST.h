@@ -222,14 +222,18 @@ namespace sass {
     class EndDoNode : public ASTNode {};
 
     // Represents a PROC SORT step: proc sort data=<dataset>; by <variables>; run;
-    class ProcSortNode : public ASTNode {
+    class ProcSortNode : public ProcNode {
     public:
         DatasetRefNode inputDataSet;    // Dataset to sort (DATA=)
         DatasetRefNode outputDataSet;   // Output dataset (OUT=), can be empty
         std::vector<std::string> byVariables; // Variables to sort by
         std::unique_ptr<ASTNode> whereCondition; // Optional WHERE condition
-        bool nodupkey;               // Flag for NODUPKEY option
-        bool duplicates;             // Flag for DUPLICATES option
+        bool nodupkey = false;               // Flag for NODUPKEY option
+        bool duplicates = false;             // Flag for DUPLICATES option
+
+        ProcSortNode() {
+            procName = "SORT";
+        }
     };
 
     // Represents the PROC MEANS procedure
@@ -309,6 +313,10 @@ namespace sass {
         DatasetRefNode inputDataSet;                    // Dataset to print (DATA=)
         std::vector<std::string> varVariables;       // Variables to display (VAR statement), optional
         std::unordered_map<std::string, std::string> options; // Options like OBS=, NOOBS, LABEL, etc.
+
+        ProcPrintNode() {
+            procName = "PRINT";
+        }
     };
 
     // Base class for SQL statements

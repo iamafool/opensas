@@ -911,7 +911,11 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     }
 
     // Sort the filtered dataset by BY variables
-    Sorter::sortDataset(filteredDS, node->byVariables);
+    auto sasDoc = dynamic_cast<SasDoc*>(filteredDS);
+    if (sasDoc)
+    {
+        Sorter::sortSasDoc(sasDoc, node->byVariables);
+    }
     logLogger.info("Sorted dataset '{}' by variables: {}",
         filteredDS->name,
         std::accumulate(node->byVariables.begin(), node->byVariables.end(), std::string(),
@@ -991,20 +995,10 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
     // Determine the output dataset
     DatasetRefNode dsNode = node->outputDataSet.dataName.empty() ? node->inputDataSet : node->outputDataSet;
-    Dataset* outputDS = env.getOrCreateDataset(dsNode).get();
-    if (dsNode.dataName != sortedDS->name) {
-        // Copy sortedDS to outputDS
-        outputDS->rows = sortedDS->rows;
-        logLogger.info("Sorted data copied to output dataset '{}'.", dsNode.getFullDsName());
-    }
-    else {
-        // Overwrite the input dataset
-        inputDS->rows = sortedDS->rows;
-        logLogger.info("Input dataset '{}' overwritten with sorted data.", inputDS->name);
-    }
+    env.saveSas7bdat(dsNode.getFullDsName());
 
-    logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
-        dsNode.getFullDsName(), outputDS->rows.size());
+    // logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
+    //     dsNode.getFullDsName(), outputDS->rows.size());
 }
 
 void Interpreter::executeProcMeans(ProcMeansNode* node) {

@@ -64,9 +64,8 @@ namespace sass {
         }
     }
 
-    void DataEnvironment::saveSas7bdat(const std::string& dsName, const std::string& filepath) {
-        string libname = getLibname(dsName);
-        auto library = getLibrary(libname);
+    void DataEnvironment::saveSas7bdat(const std::string& libName, const std::string& dsName, const std::string& filepath) {
+        auto library = getLibrary(libName);
         if (library) {
             auto ds1 = library->getDataset(dsName);
             if (ds1)
@@ -107,7 +106,7 @@ namespace sass {
 
         // 5) Call the existing function
         //    void saveSas7bdat(const std::string& dsName, const std::string& filepath);
-        this->saveSas7bdat(dsName, filePath);
+        this->saveSas7bdat(lib, ds, filePath);
     }
 
     // Suppose your getOrCreateDataset uses the library name and dataset name

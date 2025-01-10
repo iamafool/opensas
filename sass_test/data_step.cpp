@@ -54,7 +54,6 @@ run;
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "Dana");
 }
 
-
 TEST_F(SassTest, DataStepOutput1) {
     std::string code = R"(
         data a;
