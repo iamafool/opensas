@@ -12,6 +12,49 @@ namespace fs = std::filesystem;
 
 using flyweight_string = boost::flyweight<std::string>;
 
+TEST_F(SassTest, DataStepChar1) {
+    std::string code = R"(
+data out;
+    length name $40;
+    name="Alice"; output;
+    name="  Bob  "; output;
+    name="Charlie  "; output;
+    name="Dana"; output;
+run;
+    )";
+
+    // 1) Lex
+    Lexer lexer(code);
+    std::vector<Token> tokens = lexer.tokenize();
+
+    // 2) Parse
+    Parser parser(tokens);
+    auto parseResult = parser.parseProgram();
+    ASSERT_TRUE(parseResult->statements.size() == 1);
+
+    // 3) Interpret
+    interpreter->executeProgram(parseResult);
+
+    string libPath = env->getLibrary("WORK")->getPath();
+    string filename = "out.sas7bdat";
+    std::string filePath = (fs::path(libPath) / fs::path(filename)).string();
+    EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
+
+    SasDoc sasdoc1;
+    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
+
+    EXPECT_EQ(sasdoc1.var_count, 1);
+    EXPECT_EQ(sasdoc1.obs_count, 4);
+    EXPECT_EQ(sasdoc1.var_names[0], "name");
+
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "Alice");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "  Bob  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Charlie  ");
+    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "Dana");
+}
+
+
 TEST_F(SassTest, DataStepOutput1) {
     std::string code = R"(
         data a;
