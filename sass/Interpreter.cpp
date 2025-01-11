@@ -150,13 +150,10 @@ void Interpreter::executeDataStep(DataStepNode* node) {
 
     // Create or get the output dataset (SasDoc or normal Dataset)
     auto outDatasetPtr = env.getOrCreateDataset(node->outputDataSet);
-    // For full readstat integration, cast to SasDoc if you want:
     auto outDoc = std::dynamic_pointer_cast<SasDoc>(outDatasetPtr);
     if (!outDoc) {
-        // If it's not SasDoc, we can fallback or just use Dataset
         outDoc = std::make_shared<SasDoc>();
         outDoc->name = node->outputDataSet.dataName;
-        // env.dataSets[node->outputDataSet] = outDoc;
     }
 
     // Build a PDV
@@ -911,10 +908,10 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     }
 
     // Sort the filtered dataset by BY variables
-    auto sasDoc = dynamic_cast<SasDoc*>(filteredDS);
-    if (sasDoc)
+    auto sasDocIn = dynamic_cast<SasDoc*>(filteredDS);
+    if (sasDocIn)
     {
-        Sorter::sortSasDoc(sasDoc, node->byVariables);
+        Sorter::sortSasDoc(sasDocIn, node->byVariables);
     }
     logLogger.info("Sorted dataset '{}' by variables: {}",
         filteredDS->name,
@@ -995,6 +992,20 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
     // Determine the output dataset
     DatasetRefNode dsNode = node->outputDataSet.dataName.empty() ? node->inputDataSet : node->outputDataSet;
+
+    // Create or retrieve the OUTPUT dataset. 
+    // If node->outputDataSet is empty, we do "in-place" sorting.
+    bool hasOut = !node->outputDataSet.dataName.empty();
+    if (hasOut) {
+        auto outputDS = env.getOrCreateDataset(node->outputDataSet).get();
+        outputDS->name = node->outputDataSet.getFullDsName();
+        auto sasDocOut = dynamic_cast<SasDoc*>(outputDS);
+        if (sasDocOut)
+        {
+            SasDoc::copySasDocExceptName(sasDocIn, sasDocOut);
+        }
+    }
+
     env.saveSas7bdat(dsNode.getFullDsName());
 
     // logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",

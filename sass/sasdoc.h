@@ -141,6 +141,69 @@ namespace sass {
             return std::get<double>(this->values[row * this->var_count + col]);
         }
 
+        /**
+         * Copies all the fields from `src` into `dest` except the `dest->name`.
+         * This includes var_count, obs_count, var_names, var_types, var_labels,
+         * var_formats, var_length, var_display_length, var_decimals, and values.
+         *
+         * If `src` is null or `dest` is null, does nothing.
+         */
+        static void copySasDocExceptName(const SasDoc* src, SasDoc* dest) {
+            if (!src || !dest) {
+                return;
+            }
+
+            // We do NOT overwrite `dest->name`.
+            // We DO copy everything else:
+            dest->creation_time = src->creation_time;
+            dest->modified_time = src->modified_time;
+            dest->file_format_version = src->file_format_version;
+            dest->compression = src->compression;
+            dest->endianness = src->endianness;
+            // do not copy name:
+            // dest->name = src->name; // <--- intentionally omitted
+            dest->file_label = src->file_label;
+            dest->file_info = src->file_info;
+            dest->file_encoding = src->file_encoding;
+            dest->is64bit = src->is64bit;
+            dest->release = src->release;
+            dest->host = src->host;
+            dest->page_size = src->page_size;
+            dest->page_count = src->page_count;
+            dest->row_length = src->row_length;
+            dest->file_size = src->file_size;
+            dest->obs_count = src->obs_count;
+            dest->var_count = src->var_count;
+
+            // Copy the vectors:
+            dest->var_names = src->var_names;
+            dest->var_labels = src->var_labels;
+            dest->var_formats = src->var_formats;
+            dest->var_types = src->var_types;
+            dest->var_length = src->var_length;
+            dest->var_display_length = src->var_display_length;
+            dest->var_decimals = src->var_decimals;
+
+            // Copy the main `values` vector:
+            // This is typically a "shallow" copy in terms of the vector data,
+            // but each element is a variant<flyweight_string, double>.
+            // In C++, copying a std::vector<Cell> *does* copy all elements. That
+            // is effectively a ¡°deep copy¡± of the vector memory. However, the
+            // `flyweight_string` inside might share the underlying string data
+            // with the source. That is usually OK, unless you want total isolation.
+            dest->values = src->values;
+
+            // Copy bitsets:
+            dest->obs_flag = src->obs_flag;
+            dest->or_flag = src->or_flag;
+            dest->obs_library_filter = src->obs_library_filter;
+            dest->var_flag = src->var_flag;
+
+            // Copy parseValue, mapFormat, etc.
+            dest->parseValue = src->parseValue;
+            dest->mapFormat = src->mapFormat;
+        }
+
     };
 
 }
