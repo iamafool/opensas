@@ -56,8 +56,8 @@ namespace sass {
         // (Optional) Mark a variable as retained
         void setRetainFlag(const std::string& varName, bool retainedFlag);
 
-        // Initialize from SasDoc metadata (for input datasets)
-        void initFromSasDoc(SasDoc* doc);
+        // Initialize from dataset
+        void initFromDataset(Dataset* doc);
     };
 
 

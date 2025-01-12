@@ -1,5 +1,7 @@
 #include "sasdoc.h"
 #include "sasdoc.h"
+#include "sasdoc.h"
+#include "sasdoc.h"
 #include <ReadStat/readstat.h>
 #include <cmath>
 #include <cstddef>
@@ -73,6 +75,36 @@ namespace sass {
 		return READSTAT_HANDLER_OK;
 	}
 
+	int SasDoc::handle_metadata_load(readstat_metadata_t* metadata, void* ctx)
+	{
+		int var_count, obs_count, strLen;
+		SasDoc* data01 = (SasDoc*)ctx;
+
+		var_count = readstat_get_var_count(metadata);
+		obs_count = readstat_get_row_count(metadata);
+
+		data01->creation_time = readstat_get_creation_time(metadata);
+		data01->modified_time = readstat_get_modified_time(metadata);
+		data01->file_format_version = readstat_get_file_format_version(metadata);
+		data01->compression = readstat_get_compression(metadata);
+		data01->endianness = readstat_get_endianness(metadata);
+		const char* s;
+
+		data01->file_name = readstat_get_table_name(metadata);
+		data01->file_label = readstat_get_file_label(metadata);
+		data01->file_encoding = readstat_get_file_encoding(metadata);
+
+		data01->is64bit = readstat_get_file_format_is_64bit(metadata);
+		data01->columns.resize(var_count);
+
+		if (data01->parseValue)
+		{
+			data01->rows.resize(obs_count);
+		}
+
+		return READSTAT_HANDLER_OK;
+	}
+
 	int SasDoc::handle_metadata_xpt(readstat_metadata_t* metadata, void* ctx)
 	{
 		SasDoc* data01 = (SasDoc*)ctx;
@@ -137,6 +169,26 @@ namespace sass {
 		return 0;
 	}
 
+	int SasDoc::handle_variable_load(int index, readstat_variable_t* variable, const char* val_labels, void* ctx)
+	{
+		SasDoc* data01 = (SasDoc*)ctx;
+
+		VariableDef varDef;
+		varDef.name = readstat_variable_get_name(variable);
+		const char* pTemp = readstat_variable_get_label(variable);
+		varDef.label = pTemp != NULL ? pTemp : "";
+		pTemp = readstat_variable_get_format(variable);
+		varDef.format = pTemp != NULL ? pTemp : "";
+		varDef.type = variable->type;
+		varDef.length = variable->storage_width;
+		varDef.display_length = variable->display_width;
+		varDef.decimals = variable->decimals;
+
+		data01->columns[index] = varDef;
+
+		return 0;
+	}
+
 	int SasDoc::handle_value(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx)
 	{
 		SasDoc* data01 = (SasDoc*)ctx;
@@ -182,6 +234,47 @@ namespace sass {
 			if (type == READSTAT_TYPE_DOUBLE)
 			{
 				data01->values[obs_index * var_count + var_index] = -INFINITY;
+			}
+		}
+
+		return READSTAT_HANDLER_OK;
+	}
+
+	int SasDoc::handle_value_load(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx)
+	{
+		SasDoc* data01 = (SasDoc*)ctx;
+		readstat_type_t type = readstat_value_type(value);
+
+		Row& row = data01->rows[obs_index];
+		if (!readstat_value_is_missing(value, variable))
+		{
+			switch (type) {
+			case READSTAT_TYPE_STRING:
+				row.columns[variable->name] = readstat_string_value(value);
+				break;
+			case READSTAT_TYPE_DOUBLE:
+				row.columns[variable->name] = (double)readstat_double_value(value);
+				break;
+			case READSTAT_TYPE_INT8:
+				row.columns[variable->name] = (double)readstat_int8_value(value);
+				break;
+			case READSTAT_TYPE_INT16:
+				row.columns[variable->name] = (double)readstat_int16_value(value);
+				break;
+			case READSTAT_TYPE_INT32:
+				row.columns[variable->name] = (double)readstat_int32_value(value);
+				break;
+			case READSTAT_TYPE_FLOAT:
+				row.columns[variable->name] = (double)readstat_float_value(value);
+				break;
+			default:
+				break;
+			}
+		}
+		else {
+			if (type == READSTAT_TYPE_DOUBLE)
+			{
+				row.columns[variable->name] = -INFINITY;
 			}
 		}
 
@@ -252,6 +345,70 @@ namespace sass {
 
 		return 0;
 	}
+
+	int SasDoc::load(wstring path)
+	{
+		this->obs_count = 0;
+		this->var_count = 0;
+
+		readstat_error_t error = READSTAT_OK;
+		readstat_parser_t* parser = readstat_parser_init();
+		readstat_set_variable_handler(parser, &handle_variable_load);
+		if (this->parseValue)
+		{
+			readstat_set_value_handler(parser, &handle_value_load);
+		}
+
+		string filename = string(path.begin(), path.end());
+		string right9 = tail(filename, 9);
+		boost::algorithm::to_lower(right9);
+
+		string right4 = tail(filename, 4);
+		boost::algorithm::to_lower(right4);
+
+		if (right9 == ".sas7bdat")
+		{
+			readstat_set_metadata_handler(parser, &handle_metadata_load);
+			wstring temp{ filename.begin(), filename.end() };
+			error = readstat_parse_sas7bdat(parser, temp.c_str(), this);
+		}
+		else if (right4 == ".xpt")
+		{
+			readstat_set_metadata_handler(parser, &handle_metadata_xpt);
+			wstring temp{ filename.begin(), filename.end() };
+			error = readstat_parse_xport(parser, temp.c_str(), this);
+		}
+
+		if (error != READSTAT_OK)
+		{
+			printf("Error processing %s: %d\n", path, error);
+			return error;
+		}
+
+		readstat_parser_free(parser);
+
+		this->var_flag.resize(this->var_count, true);
+
+		if (this->parseValue)
+		{
+			// Get the format
+			for (int i = 0; i < this->var_count; i++)
+			{
+				string formatName = this->var_formats[i];
+				if (formatName.size() > 0 && this->mapFormat.find(formatName) == this->mapFormat.end())
+				{
+					loadSASFormat(formatName, this);
+				}
+			}
+
+			this->obs_flag.resize(this->obs_count, true);
+			this->or_flag.resize(this->obs_count, false);
+			this->obs_library_filter.resize(this->obs_count, true);
+		}
+
+		return 0;
+	}
+
 
 	static readstat_type_t toReadStatType(int var_type) {
 		// You store raw numeric IDs from ReadStat. 
@@ -393,6 +550,127 @@ namespace sass {
 		return 0;
 	}
 
+	int SasDoc::save(std::wstring path)
+	{
+		// 1) Convert wstring -> narrow string
+		std::string path_utf8 = std::string(path.begin(), path.end());
+
+		// 2) Open file descriptor
+		int fd = open(path_utf8.c_str(), O_CREAT | O_WRONLY | O_TRUNC | O_BINARY
+#ifdef _WIN32
+			, _S_IREAD | _S_IWRITE
+#endif
+		);
+		if (fd < 0) {
+			std::cerr << "Cannot open file for writing: " << path_utf8 << std::endl;
+			return -1;
+		}
+
+		// 3) Initialize the readstat writer
+		readstat_writer_t* writer = readstat_writer_init();
+		if (!writer) {
+			std::cerr << "Failed to init readstat_writer." << std::endl;
+			close(fd);
+			return -2;
+		}
+
+		readstat_set_data_writer(writer, &write_bytes);
+
+		// for demonstration, set some metadata
+		readstat_writer_set_file_label(writer, this->file_label.c_str());
+		// readstat_writer_set_file_format_version(writer, 5);
+		// readstat_writer_set_file_encoding(writer, "UTF-8");
+		// etc. as needed
+
+		// 4) Add variables
+		std::vector<readstat_variable_t*> varHandles(this->var_count, nullptr);
+		for (int i = 0; i < this->var_count; i++) {
+			readstat_type_t rsType = toReadStatType(this->var_types[i]);
+			// storage width: for numeric, say 8; for string, doc->var_length[i]
+			int col_width = (rsType == READSTAT_TYPE_STRING)
+				? this->var_length[i]
+				: 8;
+			// Add variable
+			readstat_variable_t* var = readstat_add_variable(
+				writer, this->var_names[i].c_str(), rsType, col_width);
+
+			// If you have labels or formats:
+			if (!this->var_labels[i].empty()) {
+				readstat_variable_set_label(var, this->var_labels[i].c_str());
+			}
+			if (!this->var_formats[i].empty()) {
+				readstat_variable_set_format(var, this->var_formats[i].c_str());
+			}
+			// decimals => can set display format or ...
+			// readstat_variable_set_alignment(var, READSTAT_ALIGNMENT_RIGHT);
+
+			varHandles[i] = var;
+		}
+
+		// 5) Begin writing for row_count = doc->obs_count
+		int row_count = this->obs_count;
+		readstat_error_t rc = readstat_begin_writing_sas7bdat(
+			writer, &fd, row_count);
+		if (rc != READSTAT_OK) {
+			std::cerr << "readstat_begin_writing_sas7bdat failed with code " << rc << std::endl;
+			readstat_writer_free(writer);
+			close(fd);
+			return -3;
+		}
+
+		// 6) Write each row
+		for (int r = 0; r < row_count; r++) {
+			readstat_begin_row(writer);
+			for (int c = 0; c < this->var_count; c++) {
+				readstat_type_t rsType = toReadStatType(this->var_types[c]);
+				// get the Cell from doc->values
+				int idx = r * this->var_count + c;
+				Cell cell = this->values[idx];
+
+				if (rsType == READSTAT_TYPE_STRING) {
+					// Expect a flyweight_string
+					if (std::holds_alternative<flyweight_string>(cell)) {
+						std::string val = std::get<flyweight_string>(cell).get();
+						readstat_insert_string_value(writer, varHandles[c], val.c_str());
+					}
+					else {
+						// missing => empty
+						readstat_insert_missing_value(writer, varHandles[c]);
+					}
+				}
+				else {
+					// numeric
+					if (std::holds_alternative<double>(cell)) {
+						double val = std::get<double>(cell);
+						// If val == -INFINITY, treat as missing
+						if (std::isinf(val)) {
+							readstat_insert_missing_value(writer, varHandles[c]);
+						}
+						else {
+							readstat_insert_double_value(writer, varHandles[c], val);
+						}
+					}
+					else {
+						// It's actually a string stored in the variant => missing
+						readstat_insert_missing_value(writer, varHandles[c]);
+					}
+				}
+			}
+			readstat_end_row(writer);
+		}
+
+		// 7) End writing
+		rc = readstat_end_writing(writer);
+		if (rc != READSTAT_OK) {
+			std::cerr << "readstat_end_writing failed with code " << rc << std::endl;
+		}
+
+		// 8) Cleanup
+		readstat_writer_free(writer);
+		close(fd);
+
+		return 0;
+	}
 
 
 	formatrec SasDoc::loadSASFormat(string formatName, SasDoc* data01)

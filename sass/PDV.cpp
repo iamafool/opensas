@@ -64,21 +64,20 @@ namespace sass {
     }
 
     // Suppose we want to build the PDV from the SasDoc¡¯s var_* vectors
-    void PDV::initFromSasDoc(SasDoc* doc) {
-        for (int i = 0; i < doc->var_count; i++) {
+    void PDV::initFromDataset(Dataset* doc) {
+        for (auto item : doc->columns) {
             PdvVar vdef;
-            vdef.name = doc->var_names[i];
-            vdef.isNumeric = (doc->var_types[i] == READSTAT_TYPE_DOUBLE)
-                || (doc->var_types[i] == READSTAT_TYPE_FLOAT)
-                || (doc->var_types[i] == READSTAT_TYPE_INT16)
-                || (doc->var_types[i] == READSTAT_TYPE_INT32)
-                || (doc->var_types[i] == READSTAT_TYPE_INT8);
-            vdef.length = doc->var_length[i];
-            vdef.label = doc->var_labels[i];
-            vdef.format = doc->var_formats[i];
-            // If you track informats, do similarly
+            vdef.name = item.name;
+            vdef.isNumeric = (item.type == READSTAT_TYPE_DOUBLE)
+                || (item.type == READSTAT_TYPE_FLOAT)
+                || (item.type == READSTAT_TYPE_INT16)
+                || (item.type == READSTAT_TYPE_INT32)
+                || (item.type == READSTAT_TYPE_INT8);
+            vdef.length = item.length;
+            vdef.label = item.label;
+            vdef.format = item.format;
             vdef.informat = "";
-            vdef.decimals = doc->var_decimals[i];
+            vdef.decimals = item.decimals;
             vdef.retained = false; // default
 
             // Add it

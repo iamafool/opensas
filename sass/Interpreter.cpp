@@ -222,19 +222,11 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     bool hasInputDataset = !node->inputDataSet.dataName.empty();
 
     if (hasInputDataset) {
-        // Let's get that dataset (SasDoc)
         auto inDocPtr = env.getOrCreateDataset(node->inputDataSet);
-        auto inDoc = std::dynamic_pointer_cast<SasDoc>(inDocPtr);
-        if (!inDoc) {
-            throw std::runtime_error(
-                "Input dataset '" + node->inputDataSet.getFullDsName() + "' not found or not a SasDoc."
-            );
-        }
 
-        // We'll iterate over each row in inDoc
-        int rowCount = inDoc->obs_count;
+        int rowCount = inDocPtr->getRowCount();
         bool firstIteration = true;
-        for (int rowIndex = 0; rowIndex < rowCount; ++rowIndex) {
+        for (auto row : inDocPtr->rows) {
             if (!firstIteration) {
                 pdv.resetNonRetained();
             }
@@ -243,12 +235,10 @@ void Interpreter::executeDataStep(DataStepNode* node) {
             }
 
             // load row from inDoc->values => PDV
-            for (int col = 0; col < inDoc->var_count; ++col) {
-                Value cellVal = cellToValue(inDoc->values[rowIndex * inDoc->var_count + col]);
-                const std::string& varName = inDoc->var_names[col];
-                int pdvIndex = pdv.findVarIndex(varName);
+            for (auto item : row.columns) {
+                int pdvIndex = pdv.findVarIndex(item.first);
                 if (pdvIndex >= 0) {
-                    pdv.setValue(pdvIndex, cellVal);
+                    pdv.setValue(pdvIndex, item.second);
                 }
             }
 
@@ -361,7 +351,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     }
 
     // save
-    env.saveSas7bdat(outDoc->name);
+    env.saveDataset(node->outputDataSet);
 
     // Final logging
     // outDoc->obs_count should be updated as we appended rows
@@ -908,10 +898,10 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     }
 
     // Sort the filtered dataset by BY variables
-    auto sasDocIn = dynamic_cast<SasDoc*>(filteredDS);
+    auto sasDocIn = filteredDS;
     if (sasDocIn)
     {
-        Sorter::sortSasDoc(sasDocIn, node->byVariables);
+        Sorter::sortDataset(sasDocIn, node->byVariables);
     }
     logLogger.info("Sorted dataset '{}' by variables: {}",
         filteredDS->name,
@@ -921,34 +911,28 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
             }));
 
     // Handle NODUPKEY option
-    Dataset* sortedDS = filteredDS;
+    Dataset* sortedDS = sasDocIn;
     if (node->nodupkey) {
         DatasetRefNode dsNode;
         dsNode.dataName = "TEMP_SORT_NODUPKEY";
         auto tempDS = env.getOrCreateDataset(dsNode);
-        tempDS->rows.clear();
 
         std::unordered_set<std::string> seenKeys;
-        for (const auto& row : sortedDS->rows) {
+        for (auto i = 0; i != sortedDS->getRowCount(); i++) {
+            auto row = sortedDS->getRowProxy(i);
             std::string key = "";
             for (const auto& var : node->byVariables) {
-                auto it = row.columns.find(var);
-                if (it != row.columns.end()) {
-                    if (std::holds_alternative<double>(it->second)) {
-                        key += std::to_string(std::get<double>(it->second)) + "_";
-                    }
-                    else if (std::holds_alternative<std::string>(it->second)) {
-                        key += std::get<std::string>(it->second) + "_";
-                    }
-                    // Handle other data types as needed
+                auto cell = row.getCell(var);
+                if (std::holds_alternative<double>(cell)) {
+                    key += std::to_string(std::get<double>(cell)) + "_";
                 }
-                else {
-                    key += "NA_";
+                else if (std::holds_alternative<flyweight_string>(cell)) {
+                    key += std::get<flyweight_string>(cell).get() + "_";
                 }
             }
 
             if (seenKeys.find(key) == seenKeys.end()) {
-                tempDS->rows.push_back(row);
+                tempDS->rows.push_back(sortedDS->rows[i]);
                 seenKeys.insert(key);
             }
             else {
@@ -1002,11 +986,11 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
         auto sasDocOut = dynamic_cast<SasDoc*>(outputDS);
         if (sasDocOut)
         {
-            SasDoc::copySasDocExceptName(sasDocIn, sasDocOut);
+            // SasDoc::copySasDocExceptName(sasDocIn, sasDocOut);
         }
     }
 
-    env.saveSas7bdat(dsNode.getFullDsName());
+    env.saveDataset(dsNode);
 
     // logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
     //     dsNode.getFullDsName(), outputDS->rows.size());
@@ -1959,7 +1943,7 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
             break;
         }
 
-        const Row& row = inputDS->getRow(i);
+        const Row& row = inputDS->rows[i];
         std::stringstream rowStream;
         if (!noObs) {
             rowStream << (i + 1) << "\t";
@@ -2289,19 +2273,9 @@ void Interpreter::handleReplInput(const std::string& input) {
 
 void Interpreter::executeSetStatement(SetStatementNode* node, DataStepNode* dataStepNode) {
     for (auto& dsName : node->dataSets) {
-        // e.g. "a_in.dm"
         dataStepNode->inputDataSets.push_back(dsName);
-
         auto inDocPtr = env.getOrCreateDataset(dsName);
-        auto inDoc = std::dynamic_pointer_cast<SasDoc>(inDocPtr);
-        if (!inDoc) {
-            throw std::runtime_error(
-                "Input dataset '" + dsName.getFullDsName() + "' not found or not a SasDoc."
-            );
-        }
-
-        // Initialize PDV from inDoc
-        pdv->initFromSasDoc(inDoc.get());
+        pdv->initFromDataset(inDocPtr.get());
     }
 }
 

@@ -19,6 +19,14 @@ namespace sass {
         // extend as needed
     };
 
+    enum class LibraryFileType {
+        SAS7BDAT,
+        XPT,
+        RDS,
+        CSV,
+        XLSX
+    };
+
     // Represents a single SAS library (libref). 
     // Typically points to a directory or path.
     class Library {
@@ -43,17 +51,17 @@ namespace sass {
         std::shared_ptr<Dataset> getDataset(const std::string& dsName) const;
         void removeDataset(const std::string& dsName);
         std::vector<std::string> listDatasets() const;
-
-        // Example methods to read and write SAS7BDAT from this library path
-        // (integration with a read/write logic - you might use SasDoc or ReadStat behind the scenes)
+        bool loadDataset(const std::string& dsName);
         bool loadDatasetFromSas7bdat(const std::string& dsName);
-        bool saveDatasetToSas7bdat(const std::string& dsName);
+        bool saveDataset(const std::string& dsName);
+        bool saveDatasetToSas7bdat(const std::string& dsName, std::string filepath);
         std::shared_ptr<Dataset> getOrCreateDataset(const std::string& dsName);
     private:
         std::string libName;   // e.g. "MYLIB"
         std::string libPath;   // e.g. "/my/directory"
         LibraryAccess accessMode;
         time_t creationTime;
+        LibraryFileType fileType;
 
         // A map from dataset name -> dataset pointer
         // You can store a "SasDoc" instead if you prefer

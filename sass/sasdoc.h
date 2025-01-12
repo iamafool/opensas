@@ -54,35 +54,31 @@ namespace sass {
             // or call the base if we want to keep normal row-based storage
             // todo
         }
-        std::vector<VariableDef> getColumns() const override;
+        std::vector<VariableDef> getColumns() const;
         // Implementation of virtual method from Dataset
-        std::vector<std::string> getColumnNames() const override;
-        int getRowCount() const override {
+        std::vector<std::string> getColumnNames() const;
+        int getRowCount() const {
             return obs_count;
         }
         int getColumnCount() const {
             return var_count;
         }
 
-        Row getRow(int index) const {
-            Row row;
-            for (auto i = 0; i != var_count; i++)
-            {
-                row.columns.emplace(std::pair<std::string, Value>(var_names[i], cellToValue(values[var_count * index + i])));
-            }
-            return row;
-        }
-
         // For row-based iteration
-        RowProxy getRowProxy(int row);
+        RowProxy getRowProxy(int row) override;
         // For col-based iteration
-        ColProxy getColProxy(int col);
+        ColProxy getColProxy(int col) override;
 
         static int handle_metadata(readstat_metadata_t* metadata, void* ctx);
+        static int handle_metadata_load(readstat_metadata_t* metadata, void* ctx);
         static int handle_metadata_xpt(readstat_metadata_t* metadata, void* ctx);
         static int handle_variable(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);
+        static int handle_variable_load(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);
         static int handle_value(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx);
+        static int handle_value_load(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx);
         static int read_sas7bdat(std::wstring path, void* user_ctx);
+        int load(std::wstring path) override;
+        int save(std::wstring path) override;
         /* A callback for writing bytes to your file descriptor of choice */
         /* The ctx argument comes from the readstat_begin_writing_xxx function */
         static ssize_t write_bytes(const void* data, size_t len, void* ctx) {

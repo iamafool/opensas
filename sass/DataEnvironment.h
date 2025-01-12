@@ -82,11 +82,7 @@ namespace sass {
             title = t;
         }
 
-        std::shared_ptr<SasDoc> loadSas7bdat(const std::string& filepath, const std::string& dsName); 
-
-        void saveSas7bdat(const std::string& libName, const std::string& dsName, const std::string& filepath);
-
-        void saveSas7bdat(const std::string& dsName);
+        void saveDataset(DatasetRefNode& dsNode);
 
         // Helper function to split a string by a delimiter
         std::vector<std::string> split(const std::string& s, char delimiter) const {
@@ -129,7 +125,7 @@ namespace sass {
                 std::cerr << "Library not found: " << libref << std::endl;
                 return false;
             }
-            return lib->loadDatasetFromSas7bdat(dsName);
+            return lib->loadDataset(dsName);
         }
 
     private:

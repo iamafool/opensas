@@ -1,4 +1,6 @@
 #include "Library.h"
+#include "Library.h"
+#include "Library.h"
 #include <chrono>
 #include <iostream>
 #include "sasdoc.h"
@@ -13,6 +15,7 @@ namespace sass {
     {
         // Optionally set creationTime = now
         creationTime = std::time(nullptr);
+        fileType = LibraryFileType::SAS7BDAT;
     }
 
     bool Library::hasDataset(const std::string& dsName) const {
@@ -49,6 +52,26 @@ namespace sass {
         return result;
     }
 
+    bool Library::loadDataset(const std::string& dsName)
+    {
+        switch (fileType)
+        {
+        case sass::LibraryFileType::SAS7BDAT:
+            return loadDatasetFromSas7bdat(dsName);
+        case sass::LibraryFileType::XPT:
+            break;
+        case sass::LibraryFileType::RDS:
+            break;
+        case sass::LibraryFileType::CSV:
+            break;
+        case sass::LibraryFileType::XLSX:
+            break;
+        default:
+            break;
+        }
+        return false;
+    }
+
     // Example method: load a dataset from .sas7bdat 
     // If successful, store it in datasets[dsName]
     bool Library::loadDatasetFromSas7bdat(const std::string& dsName) {
@@ -57,7 +80,7 @@ namespace sass {
             if (!fs::exists(filePath)) return false;
 
             auto doc = std::make_shared<SasDoc>();
-            if (SasDoc::read_sas7bdat(filePath.wstring(), doc.get()) == 0) {
+            if (doc.get()->load(filePath.wstring()) == 0) {
                 // success
                 this->datasets[dsName] = doc; // or convert doc-> to a Dataset
                 return true;
@@ -71,30 +94,37 @@ namespace sass {
         }
     }
 
-    // Example method: save a dataset to .sas7bdat
-    bool Library::saveDatasetToSas7bdat(const std::string& dsName) {
-        if (accessMode == LibraryAccess::READWRITE) {
-            auto it = datasets.find(dsName);
-            if (it == datasets.end()) {
-                std::cerr << "[Library] Dataset not found: " << dsName << std::endl;
-                return false;
-            }
-            // we have the dataset in memory, write it out
-            std::string filePath = (fs::path(libPath) /  fs::path(dsName + ".sas7bdat")).string();
-            std::cout << "[Library] Saving " << dsName << " to " << filePath << std::endl;
+    bool Library::saveDataset(const std::string& dsName)
+    {
+        std::string filePath = (fs::path(getPath()) / fs::path(dsName + ".sas7bdat")).string();
 
-            // if using SasDoc or readstat writer calls:
-            // auto doc = std::dynamic_pointer_cast<SasDoc>(it->second);
-            // if (doc) {
-            //     int rc = SasDoc::write_sas7bdat(filePath, doc.get());
-            //     return (rc == 0);
-            // }
-            return true;
+        switch (fileType)
+        {
+        case sass::LibraryFileType::SAS7BDAT:
+            return saveDatasetToSas7bdat(dsName, filePath);
+        case sass::LibraryFileType::XPT:
+            break;
+        case sass::LibraryFileType::RDS:
+            break;
+        case sass::LibraryFileType::CSV:
+            break;
+        case sass::LibraryFileType::XLSX:
+            break;
+        default:
+            break;
         }
-        else {
-            std::cerr << "[Library] Library is read-only or temp, cannot save dataset.\n";
-            return false;
+        return false;
+    }
+
+    bool Library::saveDatasetToSas7bdat(const std::string& dsName, std::string filepath) {
+        auto ds1 = getDataset(dsName);
+        if (ds1)
+        {
+            auto ds = (SasDoc*)(ds1.get());
+            std::wstring path(filepath.begin(), filepath.end());
+            return SasDoc::write_sas7bdat(path, ds);
         }
+        return false;
     }
 
     // If the dataset doesn't exist, create it in memory:
@@ -104,7 +134,25 @@ namespace sass {
 
             return it->second;
         }
-        auto newds = std::make_shared<SasDoc>();
+
+        std::shared_ptr<Dataset> newds = nullptr;
+        switch (fileType)
+        {
+        case sass::LibraryFileType::SAS7BDAT:
+            newds = std::make_shared<SasDoc>();
+            break;
+        case sass::LibraryFileType::XPT:
+            break;
+        case sass::LibraryFileType::RDS:
+            break;
+        case sass::LibraryFileType::CSV:
+            break;
+        case sass::LibraryFileType::XLSX:
+            break;
+        default:
+            break;
+        }
+
         newds->name = dsName;
         datasets[dsName] = newds;
         return newds;
