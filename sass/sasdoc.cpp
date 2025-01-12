@@ -416,20 +416,6 @@ namespace sass {
 		return formatRec01;
 	}
 
-	int SasDoc::GetVarNo(std::wstring varName)
-	{
-		if (varName.size() == 0)
-			return -1;
-		for (int i = 0; i < var_count; i++)
-		{
-			if (boost::iequals(var_names[i], varName))
-			{
-				return i;
-			}
-		}
-		return -1;
-	}
-
 	string SasDoc::Format(double value, string aFormat, int w, int d)
 	{
 		if (value == -INFINITY)
@@ -610,4 +596,27 @@ namespace sass {
 		return var_names;
 	}
 
+	RowProxy SasDoc::getRowProxy(int row) {
+		// range check
+		if (row < 0 || row >= obs_count) {
+			throw std::out_of_range("Row index out of range");
+		}
+		return RowProxy(*this, row);
+	}
+
+	ColProxy SasDoc::getColProxy(int col) {
+		// range check
+		if (col < 0 || col >= var_count) {
+			throw std::out_of_range("Column index out of range");
+		}
+		return ColProxy(*this, col);
+	}
+
+	int SasDoc::findColumn(const std::string& varName) const {
+		auto it = std::find(var_names.begin(), var_names.end(), varName);
+		if (it == var_names.end()) {
+			throw std::runtime_error("Column not found: " + varName);
+		}
+		return (int)(it - var_names.begin());
+	}
 }

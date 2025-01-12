@@ -41,6 +41,8 @@ namespace sass {
         FATTRSTR attrs;
     };
 
+    class RowProxy;
+    class ColProxy;
 
     class SasDoc : public Dataset
     {
@@ -71,6 +73,11 @@ namespace sass {
             return row;
         }
 
+        // For row-based iteration
+        RowProxy getRowProxy(int row);
+        // For col-based iteration
+        ColProxy getColProxy(int col);
+
         static int handle_metadata(readstat_metadata_t* metadata, void* ctx);
         static int handle_metadata_xpt(readstat_metadata_t* metadata, void* ctx);
         static int handle_variable(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);
@@ -89,12 +96,12 @@ namespace sass {
         string Format(double value01, string aFormat, int w, int d);
         string Format(tchar* value, string aFormat, int w, int d);
         // virtual void DeleteContents();
-        int GetVarNo(std::wstring varName);
         // static string Utf8ToCString(const char *utf8Str);
 
         string GetCellText(int row, int col);
         string getCellTextVariable(int row, int column);
 
+        int findColumn(const std::string& varName) const;
         // Attributes
     public:
         time_t creation_time;
@@ -205,6 +212,80 @@ namespace sass {
         }
 
     };
+
+    class RowProxy {
+    public:
+        RowProxy(SasDoc& doc_, int row_) : doc(doc_), row(row_) {}
+
+        // Return the cell at "column c"
+        Cell getCell(int c) const {
+            size_t idx = static_cast<size_t>(row) * doc.var_count + c;
+            return doc.values[idx];
+        }
+
+        // Return the cell at named column "varName"
+        Cell getCell(const std::string& varName) const {
+            int c = doc.findColumn(varName); // e.g. a small function or a map
+            return getCell(c);
+        }
+
+        // If you want to modify:
+        void setCell(int c, const Cell& val) {
+            size_t idx = static_cast<size_t>(row) * doc.var_count + c;
+            doc.values[idx] = val;
+        }
+        void setCell(const std::string& varName, const Cell& val) {
+            int c = doc.findColumn(varName);
+            setCell(c, val);
+        }
+
+        // (Optional) Return the row index for debugging:
+        int getRowIndex() const { return row; }
+
+    private:
+        SasDoc& doc;
+        int row;
+    };
+
+    class ColProxy {
+        public:
+            ColProxy(SasDoc& doc_, int col_) : doc(doc_), col(col_) {}
+
+            // Return the cell at row r
+            Cell getCell(int r) const {
+                size_t idx = static_cast<size_t>(r) * doc.var_count + col;
+                return doc.values[idx];
+            }
+
+            // If you want to modify:
+            void setCell(int r, const Cell& val) {
+                size_t idx = static_cast<size_t>(r) * doc.var_count + col;
+                doc.values[idx] = val;
+            }
+
+            // Possibly an operator[] for convenience
+            Cell operator[](int r) const {
+                return getCell(r);
+            }
+            Cell& operator[](int r) {
+                size_t idx = static_cast<size_t>(r) * doc.var_count + col;
+                return doc.values[idx];
+            }
+
+            // (Optional) Return column index or name:
+            int getColIndex() const { return col; }
+            std::string getColName() const {
+                if (col >= 0 && col < (int)doc.var_names.size()) {
+                    return doc.var_names[col];
+                }
+                return "";
+            }
+
+        private:
+            SasDoc& doc;
+            int col;
+    };
+
 
 }
 
