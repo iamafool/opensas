@@ -986,6 +986,10 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
         procSortNode->outputDataSet = *dsNode;
     }
 
+    if (match(TokenType::KEYWORD_NODUPKEY)) {
+        procSortNode->nodupkey = true;
+    }
+
     consume(TokenType::SEMICOLON, "Expected ';' to end 'PROC SORT' statement");
 
     // Parse BY statement
@@ -1009,11 +1013,7 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
     }
 
     // Parse optional NODUPKEY and DUPLICATES options
-    while (match(TokenType::KEYWORD_NODUPKEY) || match(TokenType::KEYWORD_DUPLICATES)) {
-        if (match(TokenType::KEYWORD_NODUPKEY)) {
-            consume(TokenType::KEYWORD_NODUPKEY, "Expected 'NODUPKEY' keyword");
-            procSortNode->nodupkey = true;
-        }
+    while (match(TokenType::KEYWORD_DUPLICATES)) {
         if (match(TokenType::KEYWORD_DUPLICATES)) {
             consume(TokenType::KEYWORD_DUPLICATES, "Expected 'DUPLICATES' keyword");
             procSortNode->duplicates = true;
