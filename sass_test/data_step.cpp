@@ -48,10 +48,15 @@ run;
     EXPECT_EQ(sasdoc1.getRowCount(), 4);
     EXPECT_EQ(sasdoc1.getColumnNames()[0], "name");
 
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "Alice");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "  Bob  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Charlie  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "Dana");
+    Row row;
+    row.columns = { {"name", "Alice"} }; 
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"name", "  Bob  "} }; 
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"name", "Charlie  "} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
+    row.columns = { {"name", "Dana"} };
+    EXPECT_EQ(sasdoc1.rows[3], row);
 }
 
 TEST_F(SassTest, DataStepOutput1) {
@@ -102,7 +107,7 @@ TEST_F(SassTest, DataStepOutput1) {
     EXPECT_EQ(sasdoc1.getColumnCount(), 1);
     EXPECT_EQ(sasdoc1.getRowCount(), 1);
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 10.0);
+    EXPECT_EQ(std::get<double>(sasdoc1.rows[0].columns["a"]), 10.0);
 }
 
 TEST_F(SassTest, DataStepOutput2) {
@@ -159,11 +164,11 @@ TEST_F(SassTest, DataStepOutput2) {
     EXPECT_EQ(sasdoc1.getColumnCount(), 2);
     EXPECT_EQ(sasdoc1.getRowCount(), 2);
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 10.0);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10.0);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "This is a string variable!");
-
+    Row row;
+    row.columns = { {"a", 10.0}, {"b", ""} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"a", 10.0}, {"b", "This is a string variable!"} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
 }
 
 TEST_F(SassTest, DataStepInput1) {
@@ -203,10 +208,11 @@ mary 30
     EXPECT_EQ(sasdoc1.getColumnCount(), 2);
     EXPECT_EQ(sasdoc1.getRowCount(), 2);
 
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "john");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 23.0);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "mary");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 30.0);
+    Row row;
+    row.columns = { {"name", "john"}, {"age", 23.0}};
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"name", "mary"}, {"age", 30.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
 }
 
 TEST_F(SassTest, DataStepSet1) {
@@ -291,17 +297,17 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 5);
     EXPECT_EQ(sasdoc1.getRowCount(), 1);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "y");
-    EXPECT_EQ(sasdoc1.var_names[2], "sqrt_x");
-    EXPECT_EQ(sasdoc1.var_names[3], "abs_diff");
-    EXPECT_EQ(sasdoc1.var_names[4], "log_y");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 16.0);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 30.0);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 4.0);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 5.0);
-    EXPECT_NEAR(std::get<double>(sasdoc1.values[4]), 3.4011973817, 1e-7);
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "y");
+    EXPECT_EQ(var_names[2], "sqrt_x");
+    EXPECT_EQ(var_names[3], "abs_diff");
+    EXPECT_EQ(var_names[4], "log_y");
+
+    Row row;
+    row.columns = { {"x", 16.0}, {"y", 30.0}, {"sqrt_x", 4.0}, {"abs_diff", 5.0}, {"log_y", 3.4011973817} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
 }
 
 TEST_F(SassTest, DataStepFunction2) {
@@ -350,33 +356,23 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 5);
     EXPECT_EQ(sasdoc1.getRowCount(), 4);
-    EXPECT_EQ(sasdoc1.var_names[0], "name");
-    EXPECT_EQ(sasdoc1.var_names[1], "first_part");
-    EXPECT_EQ(sasdoc1.var_names[2], "trimmed");
-    EXPECT_EQ(sasdoc1.var_names[3], "upper_name");
-    EXPECT_EQ(sasdoc1.var_names[4], "lower_name");
 
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "Alice");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "Ali");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Alice");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "ALICE");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[4]).get(), "alice");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[5]).get(), "  Bob  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[6]).get(), "  B");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[7]).get(), "  Bob");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[8]).get(), "  BOB  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[9]).get(), "  bob  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[10]).get(), "Charlie  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[11]).get(), "Cha");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[12]).get(), "Charlie");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[13]).get(), "CHARLIE  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[14]).get(), "charlie  ");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[15]).get(), "Dana");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[16]).get(), "Dan");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[17]).get(), "Dana");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[18]).get(), "DANA");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[19]).get(), "dana");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "name");
+    EXPECT_EQ(var_names[1], "first_part");
+    EXPECT_EQ(var_names[2], "trimmed");
+    EXPECT_EQ(var_names[3], "upper_name");
+    EXPECT_EQ(var_names[4], "lower_name");
 
+    Row row;
+    row.columns = { {"name", "Alice"}, {"first_part", "Ali"}, {"trimmed", "Alice"}, {"upper_name", "ALICE"}, {"lower_name", "alice"} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"name", "  Bob  "}, {"first_part", "  B"}, {"trimmed", "  Bob"}, {"upper_name", "  BOB  "}, {"lower_name", "  bob  "} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"name", "Charlie  "}, {"first_part", "Cha"}, {"trimmed", "Charlie"}, {"upper_name", "CHARLIE  "}, {"lower_name", "charlie  "} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
+    row.columns = { {"name", "Dana"}, {"first_part", "Dan"}, {"trimmed", "Dana"}, {"upper_name", "DANA"}, {"lower_name", "dana"} };
+    EXPECT_EQ(sasdoc1.rows[3], row);
 }
 
 TEST_F(SassTest, DataStepIfElse1) {
@@ -431,9 +427,11 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 3);
     EXPECT_EQ(sasdoc1.getRowCount(), 4);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "y");
-    EXPECT_EQ(sasdoc1.var_names[2], "status");
+
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "y");
+    EXPECT_EQ(var_names[2], "status");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 5);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
@@ -503,9 +501,10 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 3);
     EXPECT_EQ(sasdoc1.getRowCount(), 4);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "y");
-    EXPECT_EQ(sasdoc1.var_names[2], "category");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "y");
+    EXPECT_EQ(var_names[2], "category");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 3);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
@@ -585,10 +584,11 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 4);
     EXPECT_EQ(sasdoc1.getRowCount(), 5);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "y");
-    EXPECT_EQ(sasdoc1.var_names[2], "category");
-    EXPECT_EQ(sasdoc1.var_names[3], "status");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "y");
+    EXPECT_EQ(var_names[2], "category");
+    EXPECT_EQ(var_names[3], "status");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 3);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 10);
@@ -656,8 +656,9 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 2);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "num1");
-    EXPECT_EQ(sasdoc1.var_names[1], "num3");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "num1");
+    EXPECT_EQ(var_names[1], "num3");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 5);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
@@ -711,8 +712,9 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 2);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num2");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num2");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 10);
@@ -767,11 +769,12 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 5);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
-    EXPECT_EQ(sasdoc1.var_names[4], "sum");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
+    EXPECT_EQ(var_names[4], "sum");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 5);
@@ -836,11 +839,12 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 5);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
-    EXPECT_EQ(sasdoc1.var_names[4], "sum");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
+    EXPECT_EQ(var_names[4], "sum");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 20);
@@ -908,12 +912,13 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 6);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
-    EXPECT_EQ(sasdoc1.var_names[4], "i");
-    EXPECT_EQ(sasdoc1.var_names[5], "sum");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
+    EXPECT_EQ(var_names[4], "i");
+    EXPECT_EQ(var_names[5], "sum");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 11);
@@ -987,11 +992,12 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 5);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
-    EXPECT_EQ(sasdoc1.var_names[4], "sum");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
+    EXPECT_EQ(var_names[4], "sum");
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);

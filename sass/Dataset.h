@@ -11,10 +11,62 @@ namespace sass {
     // Define a variant type to hold different data types
     using Value = std::variant<double, std::string>;
 
+    static bool operator==(const Value& lhs, const Value& rhs) {
+        // Compare the variants. The simplest approach is to check index() and then compare:
+        if (lhs.index() != rhs.index()) {
+            return false;
+        }
+        // If both are double
+        if (lhs.index() == 0) {
+            double epsilon = 1e-7;
+            return std::fabs(std::get<double>(lhs) - std::get<double>(rhs)) < epsilon;
+        }
+        // If both are string
+        return std::get<std::string>(lhs) == std::get<std::string>(rhs);
+    }
+
     // Represents a single row in a dataset
     struct Row {
         std::unordered_map<std::string, Value> columns;
     };
+
+    static bool operator==(const Row& lhs, const Row& rhs) {
+        // If they differ in size of columns, they aren't equal
+        if (lhs.columns.size() != rhs.columns.size())
+            return false;
+        // Check each key->value
+        for (auto& kv : lhs.columns) {
+            const auto& key = kv.first;
+            const auto& valLHS = kv.second;
+            // see if key is in rhs
+            auto it = rhs.columns.find(key);
+            if (it == rhs.columns.end()) {
+                return false; // key not found
+            }
+            const Value& valRHS = it->second;
+            if (!(valLHS == valRHS)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static void PrintTo(const Row& row, std::ostream* os) {
+        // Dump row in a friendly manner
+        *os << "{ ";
+        for (auto& kv : row.columns) {
+            *os << kv.first << ": ";
+            // print the Value
+            if (kv.second.index() == 0) {
+                *os << std::get<double>(kv.second);
+            }
+            else {
+                *os << "\"" << std::get<std::string>(kv.second) << "\"";
+            }
+            *os << ", ";
+        }
+        *os << "}";
+    }
 
     // Represents a single column in the dataset. It maps column names to their values.
     using Column = std::vector<Value>;

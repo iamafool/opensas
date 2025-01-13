@@ -115,14 +115,7 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
         // sync new PDV columns to doc
         syncPdvColumnsToSasDoc(pdv, doc);
 
-       // Add a new row to doc->values
-       int outRowIndex = doc->getRowCount();
-
-       // Expand doc->values to hold one more row * doc->var_count columns
-       // We'll do a bigger reallocation:
-       std::vector<Cell> oldVals = doc->values;
-
-       // For each variable in doc->var_names / doc->var_count
+       // For each variable in doc->columns
        Row row;
        for (auto item : doc->columns) {
            int pdvIndex = pdv.findVarIndex(item.name);
@@ -139,6 +132,8 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
                }
            }
        }
+
+       doc->rows.push_back(row);
 }
 
 
@@ -361,8 +356,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
 
 void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
 {
-    // Step 1: figure out which PDV variables should appear in output
-    // E.g. build a list of "outputVars"
+    // figure out which PDV variables should appear in output
     std::vector<int> outVarIndexes; // indexes in pdv.pdvVars
     for (int i = 0; i < (int)pdv.pdvVars.size(); i++) {
         const std::string& name = pdv.pdvVars[i].name;
@@ -381,7 +375,7 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
         }
     }
 
-    // For each PdvVar in pdv, see if doc->var_names already has it
+    // For each PdvVar in pdv
     for (size_t i = 0; i != outVarIndexes.size(); i++) {
         auto pdv_index = outVarIndexes[i];
         auto pdvVar = pdv.pdvVars[pdv_index];
@@ -435,15 +429,11 @@ void Interpreter::executeAssignment(AssignmentNode *node) {
         pdv->addVariable(newVar);
         pdvIndex = pdv->findVarIndex(varName);
     }
-    // Convert Value => Cell
-    if (std::holds_alternative<double>(val)) {
-        pdv->setValue(pdvIndex, std::get<double>(val));
-    }
-    else {
-        // adjust the length for char variable
+
+    if (std::holds_alternative<std::string>(val)) {
         pdv->pdvVars[pdvIndex].length = max(pdv->pdvVars[pdvIndex].length, static_cast<int>(std::get<string>(val).size()));
-        pdv->setValue(pdvIndex, flyweight_string(std::get<std::string>(val)));
     }
+    pdv->setValue(pdvIndex, val);
 }
 
 // Execute an IF-THEN statement

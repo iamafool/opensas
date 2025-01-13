@@ -260,7 +260,7 @@ namespace sass {
 		// etc. as needed
 
 		// 4) Add variables
-		std::vector<readstat_variable_t*> varHandles(this->getColumnCount(), nullptr);
+		std::vector<readstat_variable_t*> varHandles;
 		for (auto item : columns) {
 			readstat_type_t rsType = toReadStatType(item.type);
 			// storage width: for numeric, say 8; for string, doc->var_length[i]
@@ -300,17 +300,27 @@ namespace sass {
 				readstat_type_t rsType = toReadStatType(col->type);
 				Value value = row.columns[col->name];
 				if (rsType == READSTAT_TYPE_STRING) {
-					std::string val = std::get<string>(value);
-					readstat_insert_string_value(writer, col, val.c_str());
-				}
-				else {
-					double val = std::get<double>(value);
-					// If val == -INFINITY, treat as missing
-					if (std::isinf(val)) {
-						readstat_insert_missing_value(writer, col);
+					if (std::holds_alternative<string>(value)) {
+						std::string val = std::get<string>(value);
+						readstat_insert_string_value(writer, col, val.c_str());
 					}
 					else {
-						readstat_insert_double_value(writer, col, val);
+						readstat_insert_missing_value(writer, col);
+					}
+				}
+				else {
+					if (std::holds_alternative<double>(value)) {
+						double val = std::get<double>(value);
+						// If val == -INFINITY, treat as missing
+						if (std::isinf(val)) {
+							readstat_insert_missing_value(writer, col);
+						}
+						else {
+							readstat_insert_double_value(writer, col, val);
+						}
+					}
+					else {
+						readstat_insert_missing_value(writer, col);
 					}
 				}
 			}
@@ -479,30 +489,6 @@ namespace sass {
 			break;
 		}
 		return label;
-	}
-
-	std::vector<VariableDef> SasDoc::getColumns() const
-	{
-		std::vector<VariableDef> vec;
-
-		for (auto i = 0; i != var_names.size(); i++)
-		{
-			VariableDef var;
-			var.name = var_names[i];
-			var.label = var_labels[i];
-			var.length = var_length[i];
-			var.format = var_formats[i];
-			var.informat = "";
-			vec.push_back(var);
-		}
-
-		return vec;
-	}
-
-	std::vector<std::string> SasDoc::getColumnNames() const {
-		// In many cases, SasDoc simply uses var_names as the list of columns
-		// Return that directly
-		return var_names;
 	}
 
 	ColProxy SasDoc::getColProxy(int col) {

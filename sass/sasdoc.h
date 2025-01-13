@@ -54,9 +54,6 @@ namespace sass {
             // or call the base if we want to keep normal row-based storage
             // todo
         }
-        std::vector<VariableDef> getColumns() const;
-        // Implementation of virtual method from Dataset
-        std::vector<std::string> getColumnNames() const;
 
         // For col-based iteration
         ColProxy getColProxy(int col) override;
@@ -112,10 +109,6 @@ namespace sass {
         vector<int> var_display_length;
         vector<int> var_decimals;
         vector<Cell> values;
-        boost::dynamic_bitset<> obs_flag;
-        boost::dynamic_bitset<> or_flag;
-        boost::dynamic_bitset<> obs_library_filter;
-        boost::dynamic_bitset<> var_flag;
         bool parseValue = true;
 
         std::map<string, formatrec> mapFormat;
@@ -169,12 +162,6 @@ namespace sass {
             // `flyweight_string` inside might share the underlying string data
             // with the source. That is usually OK, unless you want total isolation.
             dest->values = src->values;
-
-            // Copy bitsets:
-            dest->obs_flag = src->obs_flag;
-            dest->or_flag = src->or_flag;
-            dest->obs_library_filter = src->obs_library_filter;
-            dest->var_flag = src->var_flag;
 
             // Copy parseValue, mapFormat, etc.
             dest->parseValue = src->parseValue;
