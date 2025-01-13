@@ -116,28 +116,26 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
         syncPdvColumnsToSasDoc(pdv, doc);
 
        // Add a new row to doc->values
-       int outRowIndex = doc->obs_count;
-       doc->obs_count++;
+       int outRowIndex = doc->getRowCount();
 
        // Expand doc->values to hold one more row * doc->var_count columns
        // We'll do a bigger reallocation:
        std::vector<Cell> oldVals = doc->values;
-       doc->values.resize(doc->var_count * doc->obs_count);
 
        // For each variable in doc->var_names / doc->var_count
-       for (int c = 0; c < doc->var_count; c++) {
-           const std::string& varName = doc->var_names[c];
-           int pdvIndex = pdv.findVarIndex(varName);
+       Row row;
+       for (auto item : doc->columns) {
+           int pdvIndex = pdv.findVarIndex(item.name);
            if (pdvIndex >= 0) {
-               doc->values[outRowIndex * doc->var_count + c] = valueToCell(pdv.getValue(pdvIndex));
+               row.columns[item.name] = pdv.getValue(pdvIndex);
            }
            else {
                // missing
-               if (doc->var_types[c] == READSTAT_TYPE_STRING) {
-                   doc->values[outRowIndex * doc->var_count + c] = flyweight_string("");
+               if (item.type == READSTAT_TYPE_STRING) {
+                   row.columns[item.name] = "";
                }
                else {
-                   doc->values[outRowIndex * doc->var_count + c] = double(-INFINITY);
+                   row.columns[item.name] = double(-INFINITY);
                }
            }
        }
@@ -354,10 +352,8 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     env.saveDataset(node->outputDataSet);
 
     // Final logging
-    // outDoc->obs_count should be updated as we appended rows
-    int obsCount = outDoc->obs_count;
-    // var_count might also be known; if not we can glean from outDoc->var_names
-    int varCount = outDoc->var_count;
+    int obsCount = outDoc->getRowCount();
+    int varCount = outDoc->getColumnCount();
     logLogger.info("NOTE: The data set {} has {} observations and {} variables.",
         outDoc->name, obsCount, varCount);
 }
@@ -388,72 +384,22 @@ void Interpreter::syncPdvColumnsToSasDoc(PDV& pdv, SasDoc* doc)
     // For each PdvVar in pdv, see if doc->var_names already has it
     for (size_t i = 0; i != outVarIndexes.size(); i++) {
         auto pdv_index = outVarIndexes[i];
-        const std::string& pdvVarName = pdv.pdvVars[pdv_index].name;
-        // search doc->var_names
-        auto it = std::find(doc->var_names.begin(), doc->var_names.end(), pdvVarName);
-        if (it == doc->var_names.end()) {
-            // We have a new column
-            doc->var_names.push_back(pdvVarName);
-            // guess var_types: if isNumeric => READSTAT_TYPE_DOUBLE else READSTAT_TYPE_STRING
-            if (pdv.pdvVars[pdv_index].isNumeric) {
-                doc->var_types.push_back(READSTAT_TYPE_DOUBLE);
-            }
-            else {
-                doc->var_types.push_back(READSTAT_TYPE_STRING);
-            }
+        auto pdvVar = pdv.pdvVars[pdv_index];
 
-            // Optionally define var_labels, var_formats, var_length etc. For now we do minimal:
-            doc->var_labels.push_back("");
-            doc->var_formats.push_back("");
-            doc->var_length.push_back(pdv.pdvVars[pdv_index].length <= 0 ? 8 : pdv.pdvVars[pdv_index].length);
-            doc->var_display_length.push_back(8); // arbitrary
-            doc->var_decimals.push_back(0);
-
-            // Increase var_count
-            doc->var_count = (int)doc->var_names.size();
-
-            // Now we must expand doc->values to accommodate this new column.
-            // For each existing row in doc->obs_count, we insert a missing placeholder
-            // typically -INFINITY for numeric or "" for string
-            int oldRowCount = doc->obs_count;
-            if (oldRowCount > 0) {
-                // The old doc->values size was var_count-1 * oldRowCount, we just incremented var_count
-                // So we re-allocate doc->values to the new size
-                // we must do it carefully: we had old size = (var_count-1) * oldRowCount
-                // new size = var_count * oldRowCount
-                // We'll copy from old array to new array
-                // but a simpler approach is to do it row by row
-                int newVarCount = doc->var_count; // after increment
-                std::vector<Cell> oldValues = doc->values;
-                doc->values.clear();
-                doc->values.resize(newVarCount * oldRowCount);
-
-                // row by row copy
-                for (int r = 0; r < oldRowCount; r++) {
-                    // copy old row
-                    for (int c = 0; c < newVarCount - 1; c++) {
-                        // the old column c in that row used to be old row index = r*(var_count-1) + c
-                        doc->values[r * newVarCount + c] = oldValues[r * (newVarCount - 1) + c];
-                    }
-                    // fill the new column with missing
-                    if (pdv.pdvVars[pdv_index].isNumeric) {
-                        doc->values[r * newVarCount + (newVarCount - 1)] = double(-INFINITY);
-                    }
-                    else {
-                        doc->values[r * newVarCount + (newVarCount - 1)] = flyweight_string("");
-                    }
-                }
-            }
-            else {
-                // If there are no existing rows, nothing to do except ensure doc->values is correct size
-                // doc->obs_count=0 => doc->values is 0 sized anyway
-            }
+        auto var_names = doc->getColumnNames();
+        auto it = std::find(var_names.begin(), var_names.end(), pdvVar.name);
+        if (it == var_names.end()) {
+            VariableDef varDef;
+            varDef.name = pdvVar.name;
+            varDef.type = pdvVar.isNumeric ? READSTAT_TYPE_DOUBLE : READSTAT_TYPE_STRING;
+            varDef.length = pdvVar.length <= 0 ? 8 : pdvVar.length;
+            doc->columns.push_back(varDef);
         }
         else {
-            auto index = static_cast<int>(it - doc->var_names.begin());
-            if (!pdv.pdvVars[pdv_index].isNumeric && doc->var_length[index] != pdv.pdvVars[pdv_index].length)
+            auto index = static_cast<int>(it - var_names.begin());
+            if (!pdvVar.isNumeric && doc->columns[index].length != pdvVar.length)
             {
-                doc->var_length[index] = max(doc->var_length[index], pdv.pdvVars[pdv_index].length);
+                doc->columns[index].length = max(doc->columns[index].length, pdvVar.length);
             }
         }
     }
@@ -919,15 +865,15 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
         std::unordered_set<std::string> seenKeys;
         for (auto i = 0; i != sortedDS->getRowCount(); i++) {
-            auto row = sortedDS->getRowProxy(i);
+            auto row = sortedDS->rows[i];
             std::string key = "";
             for (const auto& var : node->byVariables) {
-                auto cell = row.getCell(var);
+                auto cell = row.columns[var];
                 if (std::holds_alternative<double>(cell)) {
                     key += std::to_string(std::get<double>(cell)) + "_";
                 }
-                else if (std::holds_alternative<flyweight_string>(cell)) {
-                    key += std::get<flyweight_string>(cell).get() + "_";
+                else if (std::holds_alternative<string>(cell)) {
+                    key += std::get<string>(cell) + "_";
                 }
             }
 

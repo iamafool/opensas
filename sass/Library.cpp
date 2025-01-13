@@ -122,7 +122,7 @@ namespace sass {
         {
             auto ds = (SasDoc*)(ds1.get());
             std::wstring path(filepath.begin(), filepath.end());
-            return SasDoc::write_sas7bdat(path, ds);
+            return ds->save(path);
         }
         return false;
     }

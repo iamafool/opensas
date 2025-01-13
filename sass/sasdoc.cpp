@@ -31,49 +31,9 @@ namespace sass {
 
 	SasDoc::SasDoc()
 	{
-		obs_count = 0;
-		var_count = 0;
 	}
 
 	// SasDoc commands
-
-	int SasDoc::handle_metadata(readstat_metadata_t* metadata, void* ctx)
-	{
-		int var_count, obs_count, strLen;
-		SasDoc* data01 = (SasDoc*)ctx;
-
-		var_count = readstat_get_var_count(metadata);
-		obs_count = readstat_get_row_count(metadata);
-
-		data01->creation_time = readstat_get_creation_time(metadata);
-		data01->modified_time = readstat_get_modified_time(metadata);
-		data01->file_format_version = readstat_get_file_format_version(metadata);
-		data01->compression = readstat_get_compression(metadata);
-		data01->endianness = readstat_get_endianness(metadata);
-		const char* s;
-
-		data01->file_name = readstat_get_table_name(metadata);
-		data01->file_label = readstat_get_file_label(metadata);
-		data01->file_encoding = readstat_get_file_encoding(metadata);
-
-		data01->is64bit = readstat_get_file_format_is_64bit(metadata);
-		data01->obs_count = obs_count;
-		data01->var_count = var_count;
-		data01->var_names.resize(var_count);
-		data01->var_labels.resize(var_count);
-		data01->var_formats.resize(var_count);
-		data01->var_types.resize(var_count);
-		data01->var_length.resize(var_count);
-		data01->var_display_length.resize(var_count);
-		data01->var_decimals.resize(var_count);
-
-		if (data01->parseValue)
-		{
-			data01->values.resize(var_count * obs_count);
-		}
-
-		return READSTAT_HANDLER_OK;
-	}
 
 	int SasDoc::handle_metadata_load(readstat_metadata_t* metadata, void* ctx)
 	{
@@ -126,7 +86,6 @@ namespace sass {
 			data01->release = "";
 
 			int var_count = readstat_get_var_count(metadata);
-			data01->var_count = var_count;
 			data01->var_names.resize(var_count);
 			data01->var_labels.resize(var_count);
 			data01->var_formats.resize(var_count);
@@ -135,38 +94,16 @@ namespace sass {
 			data01->var_display_length.resize(var_count);
 			data01->var_decimals.resize(var_count);
 		}
-		else if (data01->obs_count == 0)
+		else if (data01->getRowCount() == 0)
 		{
-			data01->obs_count = obs_count;
 			if (data01->parseValue)
 			{
-				data01->values.resize(data01->var_count * obs_count);
+				data01->values.resize(data01->getColumnCount() * obs_count);
 			}
 		}
-		else if (data01->obs_count > 0)
-		{
-			data01->obs_count = obs_count;
-		}
+
 
 		return READSTAT_HANDLER_OK;
-	}
-
-	int SasDoc::handle_variable(int index, readstat_variable_t* variable, const char* val_labels, void* ctx)
-	{
-		SasDoc* data01 = (SasDoc*)ctx;
-		int len = (int)strlen(variable->name) + 1;
-		data01->var_names[index] = readstat_variable_get_name(variable);
-
-		const char* pTemp = readstat_variable_get_label(variable);
-		data01->var_labels[index] = pTemp != NULL ? pTemp : "";
-		pTemp = readstat_variable_get_format(variable);
-		data01->var_formats[index] = pTemp != NULL ? pTemp : "";
-		data01->var_types[index] = variable->type;
-		data01->var_length[index] = variable->storage_width;
-		data01->var_display_length[index] = variable->display_width;
-		data01->var_decimals[index] = variable->decimals;
-
-		return 0;
 	}
 
 	int SasDoc::handle_variable_load(int index, readstat_variable_t* variable, const char* val_labels, void* ctx)
@@ -187,57 +124,6 @@ namespace sass {
 		data01->columns[index] = varDef;
 
 		return 0;
-	}
-
-	int SasDoc::handle_value(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx)
-	{
-		SasDoc* data01 = (SasDoc*)ctx;
-		int var_index = readstat_variable_get_index(variable);
-		int var_count = data01->var_count;
-		int str_width;
-
-		readstat_type_t type = readstat_value_type(value);
-		const char* format = readstat_variable_get_format(variable);
-
-		if (!readstat_value_is_missing(value, variable))
-		{
-			switch (type) {
-			case READSTAT_TYPE_STRING:
-				data01->values[obs_index * var_count + var_index] =
-					flyweight_string(readstat_string_value(value));
-				break;
-			case READSTAT_TYPE_DOUBLE:
-				data01->values[obs_index * var_count + var_index] =
-					(double)readstat_double_value(value);
-				break;
-			case READSTAT_TYPE_INT8:
-				data01->values[obs_index * var_count + var_index] =
-					(double)readstat_int8_value(value);
-				break;
-			case READSTAT_TYPE_INT16:
-				data01->values[obs_index * var_count + var_index] =
-					(double)readstat_int16_value(value);
-				break;
-			case READSTAT_TYPE_INT32:
-				data01->values[obs_index * var_count + var_index] =
-					(double)readstat_int32_value(value);
-				break;
-			case READSTAT_TYPE_FLOAT:
-				data01->values[obs_index * var_count + var_index] =
-					(double)readstat_float_value(value);
-				break;
-			default:
-				break;
-			}
-		}
-		else {
-			if (type == READSTAT_TYPE_DOUBLE)
-			{
-				data01->values[obs_index * var_count + var_index] = -INFINITY;
-			}
-		}
-
-		return READSTAT_HANDLER_OK;
 	}
 
 	int SasDoc::handle_value_load(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx)
@@ -281,76 +167,8 @@ namespace sass {
 		return READSTAT_HANDLER_OK;
 	}
 
-	int SasDoc::read_sas7bdat(wstring path, void* user_ctx)
-	{
-		SasDoc* data01 = (SasDoc*)user_ctx;
-
-		data01->obs_count = 0;
-		data01->var_count = 0;
-
-		readstat_error_t error = READSTAT_OK;
-		readstat_parser_t* parser = readstat_parser_init();
-		readstat_set_variable_handler(parser, &handle_variable);
-		if (data01->parseValue)
-		{
-			readstat_set_value_handler(parser, &handle_value);
-		}
-
-		string filename = string(path.begin(), path.end());
-		string right9 = tail(filename, 9);
-		boost::algorithm::to_lower(right9);
-
-		string right4 = tail(filename, 4);
-		boost::algorithm::to_lower(right4);
-
-		if (right9 == ".sas7bdat")
-		{
-			readstat_set_metadata_handler(parser, &handle_metadata);
-			wstring temp{ filename.begin(), filename.end() };
-			error = readstat_parse_sas7bdat(parser, temp.c_str(), data01);
-		}
-		else if (right4 == ".xpt")
-		{
-			readstat_set_metadata_handler(parser, &handle_metadata_xpt);
-			wstring temp{ filename.begin(), filename.end() };
-			error = readstat_parse_xport(parser, temp.c_str(), data01);
-		}
-
-		if (error != READSTAT_OK)
-		{
-			printf("Error processing %s: %d\n", path, error);
-			return error;
-		}
-
-		readstat_parser_free(parser);
-
-		data01->var_flag.resize(data01->var_count, true);
-
-		if (data01->parseValue)
-		{
-			// Get the format
-			for (int i = 0; i < data01->var_count; i++)
-			{
-				string formatName = data01->var_formats[i];
-				if (formatName.size() > 0 && data01->mapFormat.find(formatName) == data01->mapFormat.end())
-				{
-					loadSASFormat(formatName, data01);
-				}
-			}
-
-			data01->obs_flag.resize(data01->obs_count, true);
-			data01->or_flag.resize(data01->obs_count, false);
-			data01->obs_library_filter.resize(data01->obs_count, true);
-		}
-
-		return 0;
-	}
-
 	int SasDoc::load(wstring path)
 	{
-		this->obs_count = 0;
-		this->var_count = 0;
-
 		readstat_error_t error = READSTAT_OK;
 		readstat_parser_t* parser = readstat_parser_init();
 		readstat_set_variable_handler(parser, &handle_variable_load);
@@ -387,25 +205,6 @@ namespace sass {
 
 		readstat_parser_free(parser);
 
-		this->var_flag.resize(this->var_count, true);
-
-		if (this->parseValue)
-		{
-			// Get the format
-			for (int i = 0; i < this->var_count; i++)
-			{
-				string formatName = this->var_formats[i];
-				if (formatName.size() > 0 && this->mapFormat.find(formatName) == this->mapFormat.end())
-				{
-					loadSASFormat(formatName, this);
-				}
-			}
-
-			this->obs_flag.resize(this->obs_count, true);
-			this->or_flag.resize(this->obs_count, false);
-			this->obs_library_filter.resize(this->obs_count, true);
-		}
-
 		return 0;
 	}
 
@@ -426,128 +225,6 @@ namespace sass {
 		default:
 			return READSTAT_TYPE_STRING;  // fallback
 		}
-	}
-
-	int SasDoc::write_sas7bdat(std::wstring path, SasDoc* doc)
-	{
-		// 1) Convert wstring -> narrow string
-		std::string path_utf8 = std::string(path.begin(), path.end());
-
-		// 2) Open file descriptor
-		int fd = open(path_utf8.c_str(), O_CREAT | O_WRONLY | O_TRUNC | O_BINARY
-#ifdef _WIN32
-			, _S_IREAD | _S_IWRITE
-#endif
-		);
-		if (fd < 0) {
-			std::cerr << "Cannot open file for writing: " << path_utf8 << std::endl;
-			return -1;
-		}
-
-		// 3) Initialize the readstat writer
-		readstat_writer_t* writer = readstat_writer_init();
-		if (!writer) {
-			std::cerr << "Failed to init readstat_writer." << std::endl;
-			close(fd);
-			return -2;
-		}
-
-		readstat_set_data_writer(writer, &write_bytes);
-
-		// for demonstration, set some metadata
-		readstat_writer_set_file_label(writer, doc->file_label.c_str());
-		// readstat_writer_set_file_format_version(writer, 5);
-		// readstat_writer_set_file_encoding(writer, "UTF-8");
-		// etc. as needed
-
-		// 4) Add variables
-		std::vector<readstat_variable_t*> varHandles(doc->var_count, nullptr);
-		for (int i = 0; i < doc->var_count; i++) {
-			readstat_type_t rsType = toReadStatType(doc->var_types[i]);
-			// storage width: for numeric, say 8; for string, doc->var_length[i]
-			int col_width = (rsType == READSTAT_TYPE_STRING)
-				? doc->var_length[i]
-				: 8;
-			// Add variable
-			readstat_variable_t* var = readstat_add_variable(
-				writer, doc->var_names[i].c_str(), rsType, col_width);
-
-			// If you have labels or formats:
-			if (!doc->var_labels[i].empty()) {
-				readstat_variable_set_label(var, doc->var_labels[i].c_str());
-			}
-			if (!doc->var_formats[i].empty()) {
-				readstat_variable_set_format(var, doc->var_formats[i].c_str());
-			}
-			// decimals => can set display format or ...
-			// readstat_variable_set_alignment(var, READSTAT_ALIGNMENT_RIGHT);
-
-			varHandles[i] = var;
-		}
-
-		// 5) Begin writing for row_count = doc->obs_count
-		int row_count = doc->obs_count;
-		readstat_error_t rc = readstat_begin_writing_sas7bdat(
-			writer, &fd, row_count);
-		if (rc != READSTAT_OK) {
-			std::cerr << "readstat_begin_writing_sas7bdat failed with code " << rc << std::endl;
-			readstat_writer_free(writer);
-			close(fd);
-			return -3;
-		}
-
-		// 6) Write each row
-		for (int r = 0; r < row_count; r++) {
-			readstat_begin_row(writer);
-			for (int c = 0; c < doc->var_count; c++) {
-				readstat_type_t rsType = toReadStatType(doc->var_types[c]);
-				// get the Cell from doc->values
-				int idx = r * doc->var_count + c;
-				Cell cell = doc->values[idx];
-
-				if (rsType == READSTAT_TYPE_STRING) {
-					// Expect a flyweight_string
-					if (std::holds_alternative<flyweight_string>(cell)) {
-						std::string val = std::get<flyweight_string>(cell).get();
-						readstat_insert_string_value(writer, varHandles[c], val.c_str());
-					}
-					else {
-						// missing => empty
-						readstat_insert_missing_value(writer, varHandles[c]);
-					}
-				}
-				else {
-					// numeric
-					if (std::holds_alternative<double>(cell)) {
-						double val = std::get<double>(cell);
-						// If val == -INFINITY, treat as missing
-						if (std::isinf(val)) {
-							readstat_insert_missing_value(writer, varHandles[c]);
-						}
-						else {
-							readstat_insert_double_value(writer, varHandles[c], val);
-						}
-					}
-					else {
-						// It's actually a string stored in the variant => missing
-						readstat_insert_missing_value(writer, varHandles[c]);
-					}
-				}
-			}
-			readstat_end_row(writer);
-		}
-
-		// 7) End writing
-		rc = readstat_end_writing(writer);
-		if (rc != READSTAT_OK) {
-			std::cerr << "readstat_end_writing failed with code " << rc << std::endl;
-		}
-
-		// 8) Cleanup
-		readstat_writer_free(writer);
-		close(fd);
-
-		return 0;
 	}
 
 	int SasDoc::save(std::wstring path)
@@ -583,32 +260,30 @@ namespace sass {
 		// etc. as needed
 
 		// 4) Add variables
-		std::vector<readstat_variable_t*> varHandles(this->var_count, nullptr);
-		for (int i = 0; i < this->var_count; i++) {
-			readstat_type_t rsType = toReadStatType(this->var_types[i]);
+		std::vector<readstat_variable_t*> varHandles(this->getColumnCount(), nullptr);
+		for (auto item : columns) {
+			readstat_type_t rsType = toReadStatType(item.type);
 			// storage width: for numeric, say 8; for string, doc->var_length[i]
-			int col_width = (rsType == READSTAT_TYPE_STRING)
-				? this->var_length[i]
-				: 8;
+			int col_width = (rsType == READSTAT_TYPE_STRING) ? item.length : 8;
 			// Add variable
 			readstat_variable_t* var = readstat_add_variable(
-				writer, this->var_names[i].c_str(), rsType, col_width);
+				writer, item.name.c_str(), rsType, col_width);
 
 			// If you have labels or formats:
-			if (!this->var_labels[i].empty()) {
-				readstat_variable_set_label(var, this->var_labels[i].c_str());
+			if (!item.label.empty()) {
+				readstat_variable_set_label(var, item.label.c_str());
 			}
-			if (!this->var_formats[i].empty()) {
-				readstat_variable_set_format(var, this->var_formats[i].c_str());
+			if (!item.format.empty()) {
+				readstat_variable_set_format(var, item.format.c_str());
 			}
 			// decimals => can set display format or ...
 			// readstat_variable_set_alignment(var, READSTAT_ALIGNMENT_RIGHT);
 
-			varHandles[i] = var;
+			varHandles.push_back(var);
 		}
 
-		// 5) Begin writing for row_count = doc->obs_count
-		int row_count = this->obs_count;
+		// 5) Begin writing for row_count
+		int row_count = getRowCount();
 		readstat_error_t rc = readstat_begin_writing_sas7bdat(
 			writer, &fd, row_count);
 		if (rc != READSTAT_OK) {
@@ -619,40 +294,23 @@ namespace sass {
 		}
 
 		// 6) Write each row
-		for (int r = 0; r < row_count; r++) {
+		for (auto row : rows) {
 			readstat_begin_row(writer);
-			for (int c = 0; c < this->var_count; c++) {
-				readstat_type_t rsType = toReadStatType(this->var_types[c]);
-				// get the Cell from doc->values
-				int idx = r * this->var_count + c;
-				Cell cell = this->values[idx];
-
+			for (auto col : varHandles) {
+				readstat_type_t rsType = toReadStatType(col->type);
+				Value value = row.columns[col->name];
 				if (rsType == READSTAT_TYPE_STRING) {
-					// Expect a flyweight_string
-					if (std::holds_alternative<flyweight_string>(cell)) {
-						std::string val = std::get<flyweight_string>(cell).get();
-						readstat_insert_string_value(writer, varHandles[c], val.c_str());
-					}
-					else {
-						// missing => empty
-						readstat_insert_missing_value(writer, varHandles[c]);
-					}
+					std::string val = std::get<string>(value);
+					readstat_insert_string_value(writer, col, val.c_str());
 				}
 				else {
-					// numeric
-					if (std::holds_alternative<double>(cell)) {
-						double val = std::get<double>(cell);
-						// If val == -INFINITY, treat as missing
-						if (std::isinf(val)) {
-							readstat_insert_missing_value(writer, varHandles[c]);
-						}
-						else {
-							readstat_insert_double_value(writer, varHandles[c], val);
-						}
+					double val = std::get<double>(value);
+					// If val == -INFINITY, treat as missing
+					if (std::isinf(val)) {
+						readstat_insert_missing_value(writer, col);
 					}
 					else {
-						// It's actually a string stored in the variant => missing
-						readstat_insert_missing_value(writer, varHandles[c]);
+						readstat_insert_double_value(writer, col, val);
 					}
 				}
 			}
@@ -793,33 +451,6 @@ namespace sass {
 
 
 
-	string SasDoc::GetCellText(int row, int col)
-	{
-		string cellText;
-
-		if (row >= this->obs_count || col >= this->var_count || row < 0 || col < 0)
-		{
-			return cellText;
-		}
-
-		if (this->var_types[col] == READSTAT_TYPE_STRING)
-		{
-			cellText = Format((tchar*)get_value_string(row, col).data(),
-				this->var_formats[col],
-				this->var_display_length[col],
-				this->var_decimals[col]);
-		}
-		else if (this->var_types[col] == READSTAT_TYPE_DOUBLE)
-		{
-			cellText = Format(get_value_double(row, col),
-				this->var_formats[col],
-				this->var_display_length[col],
-				this->var_decimals[col]);
-		}
-		boost::algorithm::trim(cellText);
-		return cellText;
-	};
-
 	string SasDoc::getCellTextVariable(int row, int column)
 	{
 		string label;
@@ -874,17 +505,9 @@ namespace sass {
 		return var_names;
 	}
 
-	RowProxy SasDoc::getRowProxy(int row) {
-		// range check
-		if (row < 0 || row >= obs_count) {
-			throw std::out_of_range("Row index out of range");
-		}
-		return RowProxy(*this, row);
-	}
-
 	ColProxy SasDoc::getColProxy(int col) {
 		// range check
-		if (col < 0 || col >= var_count) {
+		if (col < 0 || col >= getColumnCount()) {
 			throw std::out_of_range("Column index out of range");
 		}
 		return ColProxy(*this, col);

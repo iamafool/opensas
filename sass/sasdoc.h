@@ -57,26 +57,14 @@ namespace sass {
         std::vector<VariableDef> getColumns() const;
         // Implementation of virtual method from Dataset
         std::vector<std::string> getColumnNames() const;
-        int getRowCount() const {
-            return obs_count;
-        }
-        int getColumnCount() const {
-            return var_count;
-        }
 
-        // For row-based iteration
-        RowProxy getRowProxy(int row) override;
         // For col-based iteration
         ColProxy getColProxy(int col) override;
 
-        static int handle_metadata(readstat_metadata_t* metadata, void* ctx);
         static int handle_metadata_load(readstat_metadata_t* metadata, void* ctx);
         static int handle_metadata_xpt(readstat_metadata_t* metadata, void* ctx);
-        static int handle_variable(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);
         static int handle_variable_load(int index, readstat_variable_t* variable, const char* val_labels, void* ctx);
-        static int handle_value(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx);
         static int handle_value_load(int obs_index, readstat_variable_t* variable, readstat_value_t value, void* ctx);
-        static int read_sas7bdat(std::wstring path, void* user_ctx);
         int load(std::wstring path) override;
         int save(std::wstring path) override;
         /* A callback for writing bytes to your file descriptor of choice */
@@ -86,7 +74,6 @@ namespace sass {
             return write(fd, data, len);
         }
 
-        static int write_sas7bdat(std::wstring path, SasDoc* ds);
         // todo
         static formatrec loadSASFormat(string formatName, SasDoc* data01);
         string Format(double value01, string aFormat, int w, int d);
@@ -94,7 +81,6 @@ namespace sass {
         // virtual void DeleteContents();
         // static string Utf8ToCString(const char *utf8Str);
 
-        string GetCellText(int row, int col);
         string getCellTextVariable(int row, int column);
 
         int findColumn(const std::string& varName) const;
@@ -117,8 +103,6 @@ namespace sass {
         uint32_t row_length;
         int64_t file_size;
 
-        int obs_count;
-        int var_count;
         // char **var_names;
         vector<string> var_names;
         vector<string> var_labels;
@@ -135,14 +119,6 @@ namespace sass {
         bool parseValue = true;
 
         std::map<string, formatrec> mapFormat;
-
-        string get_value_string(int row, int col) {
-            return std::get<flyweight_string>(this->values[row * this->var_count + col]);
-        }
-
-        double get_value_double(int row, int col) {
-            return std::get<double>(this->values[row * this->var_count + col]);
-        }
 
         /**
          * Copies all the fields from `src` into `dest` except the `dest->name`.
@@ -175,8 +151,6 @@ namespace sass {
             dest->page_count = src->page_count;
             dest->row_length = src->row_length;
             dest->file_size = src->file_size;
-            dest->obs_count = src->obs_count;
-            dest->var_count = src->var_count;
 
             // Copy the vectors:
             dest->var_names = src->var_names;
@@ -209,53 +183,19 @@ namespace sass {
 
     };
 
-    class RowProxy {
-    public:
-        RowProxy(SasDoc& doc_, int row_) : doc(doc_), row(row_) {}
-
-        // Return the cell at "column c"
-        Cell getCell(int c) const {
-            size_t idx = static_cast<size_t>(row) * doc.var_count + c;
-            return doc.values[idx];
-        }
-
-        // Return the cell at named column "varName"
-        Cell getCell(const std::string& varName) const {
-            int c = doc.findColumn(varName); // e.g. a small function or a map
-            return getCell(c);
-        }
-
-        // If you want to modify:
-        void setCell(int c, const Cell& val) {
-            size_t idx = static_cast<size_t>(row) * doc.var_count + c;
-            doc.values[idx] = val;
-        }
-        void setCell(const std::string& varName, const Cell& val) {
-            int c = doc.findColumn(varName);
-            setCell(c, val);
-        }
-
-        // (Optional) Return the row index for debugging:
-        int getRowIndex() const { return row; }
-
-    private:
-        SasDoc& doc;
-        int row;
-    };
-
     class ColProxy {
         public:
             ColProxy(SasDoc& doc_, int col_) : doc(doc_), col(col_) {}
 
             // Return the cell at row r
             Cell getCell(int r) const {
-                size_t idx = static_cast<size_t>(r) * doc.var_count + col;
+                size_t idx = static_cast<size_t>(r) * doc.getColumnCount() + col;
                 return doc.values[idx];
             }
 
             // If you want to modify:
             void setCell(int r, const Cell& val) {
-                size_t idx = static_cast<size_t>(r) * doc.var_count + col;
+                size_t idx = static_cast<size_t>(r) * doc.getColumnCount() + col;
                 doc.values[idx] = val;
             }
 
@@ -264,7 +204,7 @@ namespace sass {
                 return getCell(r);
             }
             Cell& operator[](int r) {
-                size_t idx = static_cast<size_t>(r) * doc.var_count + col;
+                size_t idx = static_cast<size_t>(r) * doc.getColumnCount() + col;
                 return doc.values[idx];
             }
 

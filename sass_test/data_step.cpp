@@ -41,12 +41,12 @@ run;
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    int rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 1);
-    EXPECT_EQ(sasdoc1.obs_count, 4);
-    EXPECT_EQ(sasdoc1.var_names[0], "name");
+    EXPECT_EQ(sasdoc1.getColumnCount(), 1);
+    EXPECT_EQ(sasdoc1.getRowCount(), 4);
+    EXPECT_EQ(sasdoc1.getColumnNames()[0], "name");
 
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "Alice");
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "  Bob  ");
@@ -96,11 +96,11 @@ TEST_F(SassTest, DataStepOutput1) {
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 1);
-    EXPECT_EQ(sasdoc1.obs_count, 1);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 1);
+    EXPECT_EQ(sasdoc1.getRowCount(), 1);
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 10.0);
 }
@@ -153,11 +153,11 @@ TEST_F(SassTest, DataStepOutput2) {
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 2);
-    EXPECT_EQ(sasdoc1.obs_count, 2);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 2);
+    EXPECT_EQ(sasdoc1.getRowCount(), 2);
 
     EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 10.0);
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[1]).get(), "");
@@ -197,11 +197,11 @@ mary 30
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 2);
-    EXPECT_EQ(sasdoc1.obs_count, 2);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 2);
+    EXPECT_EQ(sasdoc1.getRowCount(), 2);
 
     EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[0]).get(), "john");
     EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 23.0);
@@ -237,11 +237,11 @@ TEST_F(SassTest, DataStepSet1) {
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 16);
-    EXPECT_EQ(sasdoc1.obs_count, 5);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 16);
+    EXPECT_EQ(sasdoc1.getRowCount(), 5);
 }
 
 TEST_F(SassTest, DataStepFunction1) {
@@ -286,11 +286,11 @@ run;
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 5);
-    EXPECT_EQ(sasdoc1.obs_count, 1);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 5);
+    EXPECT_EQ(sasdoc1.getRowCount(), 1);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "y");
     EXPECT_EQ(sasdoc1.var_names[2], "sqrt_x");
@@ -345,11 +345,11 @@ run;
     EXPECT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 5);
-    EXPECT_EQ(sasdoc1.obs_count, 4);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 5);
+    EXPECT_EQ(sasdoc1.getRowCount(), 4);
     EXPECT_EQ(sasdoc1.var_names[0], "name");
     EXPECT_EQ(sasdoc1.var_names[1], "first_part");
     EXPECT_EQ(sasdoc1.var_names[2], "trimmed");
@@ -426,11 +426,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 3);
-    EXPECT_EQ(sasdoc1.obs_count, 4);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 3);
+    EXPECT_EQ(sasdoc1.getRowCount(), 4);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "y");
     EXPECT_EQ(sasdoc1.var_names[2], "status");
@@ -498,11 +498,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 3);
-    EXPECT_EQ(sasdoc1.obs_count, 4);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 3);
+    EXPECT_EQ(sasdoc1.getRowCount(), 4);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "y");
     EXPECT_EQ(sasdoc1.var_names[2], "category");
@@ -580,11 +580,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 4);
-    EXPECT_EQ(sasdoc1.obs_count, 5);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 4);
+    EXPECT_EQ(sasdoc1.getRowCount(), 5);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "y");
     EXPECT_EQ(sasdoc1.var_names[2], "category");
@@ -651,11 +651,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 2);
-    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 2);
+    EXPECT_EQ(sasdoc1.getRowCount(), 3);
     EXPECT_EQ(sasdoc1.var_names[0], "num1");
     EXPECT_EQ(sasdoc1.var_names[1], "num3");
 
@@ -706,11 +706,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 2);
-    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 2);
+    EXPECT_EQ(sasdoc1.getRowCount(), 3);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "num2");
 
@@ -762,11 +762,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 5);
-    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 5);
+    EXPECT_EQ(sasdoc1.getRowCount(), 3);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "num1");
     EXPECT_EQ(sasdoc1.var_names[2], "num2");
@@ -831,11 +831,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 5);
-    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 5);
+    EXPECT_EQ(sasdoc1.getRowCount(), 3);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "num1");
     EXPECT_EQ(sasdoc1.var_names[2], "num2");
@@ -903,11 +903,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 6);
-    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 6);
+    EXPECT_EQ(sasdoc1.getRowCount(), 3);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "num1");
     EXPECT_EQ(sasdoc1.var_names[2], "num2");
@@ -982,11 +982,11 @@ run;
     ASSERT_TRUE(fs::exists(filePath)) << "Expected file does not exist at path: " << filePath;
 
     SasDoc sasdoc1;
-    auto rc = SasDoc::read_sas7bdat(wstring(filePath.begin(), filePath.end()), &sasdoc1);
+    auto rc = sasdoc1.load(wstring(filePath.begin(), filePath.end()));
     EXPECT_EQ(rc, 0) << "read_sas7bdat() failed for path: " << filePath;
 
-    EXPECT_EQ(sasdoc1.var_count, 5);
-    EXPECT_EQ(sasdoc1.obs_count, 3);
+    EXPECT_EQ(sasdoc1.getColumnCount(), 5);
+    EXPECT_EQ(sasdoc1.getRowCount(), 3);
     EXPECT_EQ(sasdoc1.var_names[0], "x");
     EXPECT_EQ(sasdoc1.var_names[1], "num1");
     EXPECT_EQ(sasdoc1.var_names[2], "num2");

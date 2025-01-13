@@ -45,7 +45,6 @@ namespace sass {
         std::vector<VariableDef> columns;
 
         virtual void addRow(const Row& row) = 0;
-        virtual RowProxy getRowProxy(int i) = 0;
         virtual ColProxy getColProxy(int i) = 0;
         virtual int load(std::wstring path) = 0;
         virtual int save(std::wstring path) = 0;
