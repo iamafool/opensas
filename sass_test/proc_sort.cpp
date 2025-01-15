@@ -51,23 +51,19 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 4);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 5);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 25);
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 5.0}, {"num2", 10.0}, {"num3", 15.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 10.0}, {"num2", 15.0}, {"num3", 20.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 15.0}, {"num2", 20.0}, {"num3", 25.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, ProcSortBasic02) {
@@ -109,23 +105,19 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 4);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 5);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 25);
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 5.0}, {"num2", 10.0}, {"num3", 15.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 10.0}, {"num2", 15.0}, {"num3", 20.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 15.0}, {"num2", 20.0}, {"num3", 25.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, ProcSortNodupkey01) {
@@ -168,21 +160,17 @@ run;
 
     EXPECT_EQ(sasdoc1.getColumnCount(), 4);
     EXPECT_EQ(sasdoc1.getRowCount(), 3);
-    EXPECT_EQ(sasdoc1.var_names[0], "x");
-    EXPECT_EQ(sasdoc1.var_names[1], "num1");
-    EXPECT_EQ(sasdoc1.var_names[2], "num2");
-    EXPECT_EQ(sasdoc1.var_names[3], "num3");
+    std::vector<std::string> var_names = sasdoc1.getColumnNames();
+    EXPECT_EQ(var_names[0], "x");
+    EXPECT_EQ(var_names[1], "num1");
+    EXPECT_EQ(var_names[2], "num2");
+    EXPECT_EQ(var_names[3], "num3");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 5);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 25);
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 5.0}, {"num2", 10.0}, {"num3", 15.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 10.0}, {"num2", 15.0}, {"num3", 20.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 15.0}, {"num2", 20.0}, {"num3", 25.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }

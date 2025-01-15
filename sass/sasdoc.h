@@ -120,52 +120,37 @@ namespace sass {
          *
          * If `src` is null or `dest` is null, does nothing.
          */
-        static void copySasDocExceptName(const SasDoc* src, SasDoc* dest) {
-            if (!src || !dest) {
+        void copyFrom(Dataset* src) {
+            if (!src) {
                 return;
             }
 
-            // We do NOT overwrite `dest->name`.
-            // We DO copy everything else:
-            dest->creation_time = src->creation_time;
-            dest->modified_time = src->modified_time;
-            dest->file_format_version = src->file_format_version;
-            dest->compression = src->compression;
-            dest->endianness = src->endianness;
-            // do not copy name:
-            // dest->name = src->name; // <--- intentionally omitted
-            dest->file_label = src->file_label;
-            dest->file_info = src->file_info;
-            dest->file_encoding = src->file_encoding;
-            dest->is64bit = src->is64bit;
-            dest->release = src->release;
-            dest->host = src->host;
-            dest->page_size = src->page_size;
-            dest->page_count = src->page_count;
-            dest->row_length = src->row_length;
-            dest->file_size = src->file_size;
+            auto srcSasDoc = dynamic_cast<SasDoc*>(src);
+            if (srcSasDoc)
+            {
+                // We do NOT overwrite `this->name`.
+                // We DO copy everything else:
+                this->creation_time = srcSasDoc->creation_time;
+                this->modified_time = srcSasDoc->modified_time;
+                this->file_format_version = srcSasDoc->file_format_version;
+                this->compression = srcSasDoc->compression;
+                this->endianness = srcSasDoc->endianness;
+                this->file_label = srcSasDoc->file_label;
+                this->file_info = srcSasDoc->file_info;
+                this->file_encoding = srcSasDoc->file_encoding;
+                this->is64bit = srcSasDoc->is64bit;
+                this->release = srcSasDoc->release;
+                this->host = srcSasDoc->host;
+                this->page_size = srcSasDoc->page_size;
+                this->page_count = srcSasDoc->page_count;
+                this->row_length = srcSasDoc->row_length;
+                this->file_size = srcSasDoc->file_size;
+                this->parseValue = srcSasDoc->parseValue;
+                this->mapFormat = srcSasDoc->mapFormat;
+                this->columns = srcSasDoc->columns;
+                this->rows = srcSasDoc->rows;
+            }
 
-            // Copy the vectors:
-            dest->var_names = src->var_names;
-            dest->var_labels = src->var_labels;
-            dest->var_formats = src->var_formats;
-            dest->var_types = src->var_types;
-            dest->var_length = src->var_length;
-            dest->var_display_length = src->var_display_length;
-            dest->var_decimals = src->var_decimals;
-
-            // Copy the main `values` vector:
-            // This is typically a "shallow" copy in terms of the vector data,
-            // but each element is a variant<flyweight_string, double>.
-            // In C++, copying a std::vector<Cell> *does* copy all elements. That
-            // is effectively a ¡°deep copy¡± of the vector memory. However, the
-            // `flyweight_string` inside might share the underlying string data
-            // with the source. That is usually OK, unless you want total isolation.
-            dest->values = src->values;
-
-            // Copy parseValue, mapFormat, etc.
-            dest->parseValue = src->parseValue;
-            dest->mapFormat = src->mapFormat;
         }
 
     };

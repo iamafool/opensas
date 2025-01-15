@@ -100,6 +100,7 @@ namespace sass {
         virtual ColProxy getColProxy(int i) = 0;
         virtual int load(std::wstring path) = 0;
         virtual int save(std::wstring path) = 0;
+        virtual void copyFrom(Dataset* src) = 0;
 
         // Method to get all the columns
         std::vector<std::string> getColumnNames() const {

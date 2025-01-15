@@ -919,11 +919,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     if (hasOut) {
         auto outputDS = env.getOrCreateDataset(node->outputDataSet).get();
         outputDS->name = node->outputDataSet.getFullDsName();
-        auto sasDocOut = dynamic_cast<SasDoc*>(outputDS);
-        if (sasDocOut)
-        {
-            // SasDoc::copySasDocExceptName(sasDocIn, sasDocOut);
-        }
+        outputDS->copyFrom(sortedDS);
     }
 
     env.saveDataset(dsNode);

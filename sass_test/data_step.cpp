@@ -433,12 +433,11 @@ run;
     EXPECT_EQ(var_names[1], "y");
     EXPECT_EQ(var_names[2], "status");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 5);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Low");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]),40);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[5]).get(), "High");
+    Row row;
+    row.columns = { {"x", 5.0}, {"y", 15.0}, {"status", "Low"} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 15.0}, {"y", 40.0}, {"status", "High"} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
 }
 
 TEST_F(SassTest, DataStepIfElse2) {
@@ -506,19 +505,15 @@ run;
     EXPECT_EQ(var_names[1], "y");
     EXPECT_EQ(var_names[2], "category");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Low");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 7);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 25);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[5]).get(), "Medium");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 12);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 40);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[8]).get(), "High");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 18);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 75);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[11]).get(), "Very High");
-
+    Row row;
+    row.columns = { {"x", 3.0}, {"y", 15.0}, {"category", "Low"} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 7.0}, {"y", 25.0}, {"category", "Medium"} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 12.0}, {"y", 40.0}, {"category", "High"} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
+    row.columns = { {"x", 18.0}, {"y", 75.0}, {"category", "Very High"} };
+    EXPECT_EQ(sasdoc1.rows[3], row);
 }
 
 TEST_F(SassTest, DataStepIfElse3) {
@@ -590,27 +585,17 @@ run;
     EXPECT_EQ(var_names[2], "category");
     EXPECT_EQ(var_names[3], "status");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 10);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[2]).get(), "Low");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[3]).get(), "Poor");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 7);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 15);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[6]).get(), "Medium");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[7]).get(), "Average");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 12);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 18);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[10]).get(), "High");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[11]).get(), "Fair");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 16);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 35);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[14]).get(), "Very High");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[15]).get(), "Excellent");
-    EXPECT_EQ(std::get<double>(sasdoc1.values[16]), 9);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[17]), 20);
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[18]).get(), "Medium");
-    EXPECT_EQ(std::get<flyweight_string>(sasdoc1.values[19]).get(), "Average");
-
+    Row row;
+    row.columns = { {"x", 3.0}, {"y", 10.0}, {"category", "Low"}, {"status", "Poor"} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 7.0}, {"y", 15.0}, {"category", "Medium"}, {"status", "Average"} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 12.0}, {"y", 18.0}, {"category", "High"}, {"status", "Fair"} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
+    row.columns = { {"x", 16.0}, {"y", 35.0}, {"category", "Very High"}, {"status", "Excellent"} };
+    EXPECT_EQ(sasdoc1.rows[3], row);
+    row.columns = { {"x", 9.0}, {"y", 20.0}, {"category", "Medium"}, {"status", "Average"} };
+    EXPECT_EQ(sasdoc1.rows[4], row);
 }
 
 TEST_F(SassTest, DataStepDrop1) {
@@ -660,13 +645,13 @@ run;
     EXPECT_EQ(var_names[0], "num1");
     EXPECT_EQ(var_names[1], "num3");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 5);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 25);
-
+    Row row;
+    row.columns = { {"num1", 5.0}, {"num3", 15.0}};
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"num1", 10.0}, {"num3", 20.0}};
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"num1", 15.0}, {"num3", 25.0}};
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, DataStepKeep1) {
@@ -716,13 +701,13 @@ run;
     EXPECT_EQ(var_names[0], "x");
     EXPECT_EQ(var_names[1], "num2");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 20);
-
+    Row row;
+    row.columns = { {"x", 1.0}, {"num2", 10.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num2", 15.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num2", 20.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, DataStepRetain1) {
@@ -776,22 +761,13 @@ run;
     EXPECT_EQ(var_names[3], "num3");
     EXPECT_EQ(var_names[4], "sum");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 5);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 0);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 25);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[14]), 1);
-
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 5.0}, {"num2", 10.0}, {"num3", 15.0}, {"sum", 0.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 10.0}, {"num2", 15.0}, {"num3", 20.0}, {"sum", 1.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 15.0}, {"num2", 20.0}, {"num3", 25.0}, {"sum", 1.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, DataStepArray1) {
@@ -846,22 +822,13 @@ run;
     EXPECT_EQ(var_names[3], "num3");
     EXPECT_EQ(var_names[4], "sum");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 10);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 45);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 25);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 60);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 30);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 25);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[14]), 75);
-
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 20.0}, {"num2", 10.0}, {"num3", 15.0}, {"sum", 45.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 25.0}, {"num2", 15.0}, {"num3", 20.0}, {"sum", 60.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 30.0}, {"num2", 20.0}, {"num3", 25.0}, {"sum", 75.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, DataStepDo1) {
@@ -920,25 +887,13 @@ run;
     EXPECT_EQ(var_names[4], "i");
     EXPECT_EQ(var_names[5], "sum");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 11);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 22);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 33);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 4);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 66);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 16);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 27);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 38);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 4);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 81);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 21);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[14]), 32);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[15]), 43);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[16]), 4);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[17]), 96);
-
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 11.0}, {"num2", 22.0}, {"num3", 33.0}, {"sum", 66.0}, {"i", 4.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 16.0}, {"num2", 27.0}, {"num3", 38.0}, {"sum", 81.0}, {"i", 4.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 21.0}, {"num2", 32.0}, {"num3", 43.0}, {"sum", 96.0}, {"i", 4.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
 
 TEST_F(SassTest, DataStepDo2) {
@@ -999,20 +954,11 @@ run;
     EXPECT_EQ(var_names[3], "num3");
     EXPECT_EQ(var_names[4], "sum");
 
-    EXPECT_EQ(std::get<double>(sasdoc1.values[0]), 1);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[1]), 15);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[2]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[3]), 25);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[4]), 60);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[5]), 2);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[6]), 20);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[7]), 25);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[8]), 30);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[9]), 135);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[10]), 3);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[11]), 25);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[12]), 30);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[13]), 35);
-    EXPECT_EQ(std::get<double>(sasdoc1.values[14]), 225);
-
+    Row row;
+    row.columns = { {"x", 1.0}, {"num1", 15.0}, {"num2", 20.0}, {"num3", 25.0}, {"sum", 60.0} };
+    EXPECT_EQ(sasdoc1.rows[0], row);
+    row.columns = { {"x", 2.0}, {"num1", 20.0}, {"num2", 25.0}, {"num3", 30.0}, {"sum", 135.0} };
+    EXPECT_EQ(sasdoc1.rows[1], row);
+    row.columns = { {"x", 3.0}, {"num1", 25.0}, {"num2", 30.0}, {"num3", 35.0}, {"sum", 225.0} };
+    EXPECT_EQ(sasdoc1.rows[2], row);
 }
