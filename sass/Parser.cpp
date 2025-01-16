@@ -517,31 +517,51 @@ int Parser::getPrecedence(const std::string& op) const {
 }
 
 std::unique_ptr<ASTNode> Parser::parseProc() {
-    // proc <procName>; <procStatements>; run;
-    auto node = std::make_unique<ProcNode>();
     consume(TokenType::KEYWORD_PROC, "Expected 'proc'");
 
-    Token t = peek();
-    if (t.type == TokenType::KEYWORD_SORT) {
-        return parseProcSort();
-    }
-    else if (t.type == TokenType::KEYWORD_MEANS) {
-        return parseProcMeans();
-    }
-    else if (t.type == TokenType::KEYWORD_FREQ) {
-        return parseProcFreq();
-    }
-    else if (t.type == TokenType::KEYWORD_PRINT) {
-        return parseProcPrint();
-    }
-    else if (t.type == TokenType::KEYWORD_SQL) {
-        return parseProcSQL();
-    }
-    else {
-        throw std::runtime_error("Unsupported PROC type: " + t.text);
+    bool foundRun = false;
+    int i = 0;
+    while (!foundRun) {
+        Token tok = peek(i);
+        if (tok.type == TokenType::EOF_TOKEN) {
+            // We ran out of tokens -> incomplete
+            return nullptr;
+        }
+        else if (tok.type == TokenType::KEYWORD_RUN) {
+            if (peek(i+1).type == TokenType::SEMICOLON) {
+                foundRun = true;
+
+                Token t = peek();
+                if (t.type == TokenType::KEYWORD_SORT) {
+                    return parseProcSort();
+                }
+                else if (t.type == TokenType::KEYWORD_MEANS) {
+                    return parseProcMeans();
+                }
+                else if (t.type == TokenType::KEYWORD_FREQ) {
+                    return parseProcFreq();
+                }
+                else if (t.type == TokenType::KEYWORD_PRINT) {
+                    return parseProcPrint();
+                }
+                else if (t.type == TokenType::KEYWORD_SQL) {
+                    return parseProcSQL();
+                }
+                else {
+                    throw std::runtime_error("Unsupported PROC type: " + t.text);
+                }
+            }
+            else {
+                // Missing semicolon after run -> incomplete or error
+                return nullptr;
+            }
+        }
+        else {
+            i++;
+        }
     }
 
-    return node;
+    return nullptr;
 }
 
 std::unique_ptr<ASTNode> Parser::parseDrop() {
@@ -976,7 +996,7 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
         procSortNode->inputDataSet = *dsNode;
     }
     else {
-        throw std::runtime_error("PROC SORT requires a DATA= option");
+        return nullptr;
     }
 
     // Parse OUT= option (optional)
@@ -1001,7 +1021,7 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
         consume(TokenType::SEMICOLON, "Expected ';' to end 'BY' statement");
     }
     else {
-        throw std::runtime_error("PROC SORT requires a BY statement");
+        return nullptr;
     }
 
     // Parse optional WHERE statement
@@ -1010,14 +1030,6 @@ std::unique_ptr<ASTNode> Parser::parseProcSort() {
         consume(TokenType::LPAREN, "Expected '(' after 'WHERE'");
         procSortNode->whereCondition = parseExpression(); // Parse condition expression
         consume(TokenType::RPAREN, "Expected ')' after 'WHERE' condition");
-    }
-
-    // Parse optional NODUPKEY and DUPLICATES options
-    while (match(TokenType::KEYWORD_DUPLICATES)) {
-        if (match(TokenType::KEYWORD_DUPLICATES)) {
-            consume(TokenType::KEYWORD_DUPLICATES, "Expected 'DUPLICATES' keyword");
-            procSortNode->duplicates = true;
-        }
     }
 
     // Expect RUN; statement

@@ -794,8 +794,6 @@ void Interpreter::executeDo(DoNode* node) {
 }
 
 void Interpreter::executeProcSort(ProcSortNode* node) {
-    logLogger.info("Executing PROC SORT");
-
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
     if (!inputDS) {
@@ -839,12 +837,6 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
     {
         Sorter::sortDataset(sasDocIn, node->byVariables);
     }
-    logLogger.info("Sorted dataset '{}' by variables: {}",
-        filteredDS->name,
-        std::accumulate(node->byVariables.begin(), node->byVariables.end(), std::string(),
-            [](const std::string& a, const std::string& b) -> std::string {
-                return a.empty() ? b : a + ", " + b;
-            }));
 
     // Handle NODUPKEY option
     Dataset* sortedDS = sasDocIn;
@@ -878,36 +870,6 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
         sortedDS->rows = tempDS.get()->rows;
         logLogger.info("Applied NODUPKEY option. {} observations remain after removing duplicates.", sortedDS->rows.size());
-    }
-
-    // Handle DUPLICATES option
-    if (node->duplicates) {
-        std::unordered_set<std::string> seenKeys;
-        for (const auto& row : sortedDS->rows) {
-            std::string key = "";
-            for (const auto& var : node->byVariables) {
-                auto it = row.columns.find(var);
-                if (it != row.columns.end()) {
-                    if (std::holds_alternative<double>(it->second)) {
-                        key += std::to_string(std::get<double>(it->second)) + "_";
-                    }
-                    else if (std::holds_alternative<std::string>(it->second)) {
-                        key += std::get<std::string>(it->second) + "_";
-                    }
-                    // Handle other data types as needed
-                }
-                else {
-                    key += "NA_";
-                }
-            }
-
-            if (seenKeys.find(key) != seenKeys.end()) {
-                logLogger.info("Duplicate key '{}' found.", key);
-            }
-            else {
-                seenKeys.insert(key);
-            }
-        }
     }
 
     // Determine the output dataset
