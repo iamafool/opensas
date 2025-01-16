@@ -24,7 +24,7 @@ void Interpreter::executeProgram(const std::unique_ptr<ProgramNode> &program) {
             execute(stmt.get());
         }
         catch (const std::runtime_error &e) {
-            logLogger.error("Execution error: {}", e.what());
+            env.logLogger.error("Execution error: {}", e.what());
             // Continue with the next statement
         }
     }
@@ -139,7 +139,7 @@ void Interpreter::appendPdvRowToSasDoc(PDV& pdv, SasDoc* doc)
 
 // Execute a DATA step
 void Interpreter::executeDataStep(DataStepNode* node) {
-    ScopedStepTimer timer("DATA statement", logLogger);
+    ScopedStepTimer timer("DATA statement", env.logLogger);
 
     // Create or get the output dataset (SasDoc or normal Dataset)
     auto outDatasetPtr = env.getOrCreateDataset(node->outputDataSet);
@@ -349,7 +349,7 @@ void Interpreter::executeDataStep(DataStepNode* node) {
     // Final logging
     int obsCount = outDoc->getRowCount();
     int varCount = outDoc->getColumnCount();
-    logLogger.info("NOTE: The data set {} has {} observations and {} variables.",
+    env.logLogger.info("NOTE: The data set {} has {} observations and {} variables.",
         outDoc->name, obsCount, varCount);
 }
 
@@ -440,7 +440,7 @@ void Interpreter::executeAssignment(AssignmentNode *node) {
 void Interpreter::executeIfThen(IfThenNode *node) {
     Value cond = evaluate(node->condition.get());
     double d = toNumber(cond);
-    logLogger.info("Evaluating IF condition: {}", d);
+    env.logLogger.info("Evaluating IF condition: {}", d);
 
     if (d != 0.0) { // Non-zero is true
         for (const auto &stmt : node->thenStatements) {
@@ -462,7 +462,7 @@ void Interpreter::executeOutput(OutputNode *node) {
     // In this implementation, 'OUTPUT' sets a flag in the DATA step execution to add the current row
     // The actual addition to the dataset is handled in 'executeDataStep'
     // However, to make this explicit, you can modify 'currentRow' if needed
-    logLogger.info("OUTPUT statement executed. Current row will be added to the output dataset.");
+    env.logLogger.info("OUTPUT statement executed. Current row will be added to the output dataset.");
     // Optionally, set a flag or manipulate 'currentRow' here
 }
 
@@ -470,7 +470,7 @@ void Interpreter::executeOutput(OutputNode *node) {
 void Interpreter::executeOptions(OptionsNode* node) {
     for (const auto& opt : node->options) {
         env.setOption(opt.first, opt.second);
-        logLogger.info("Set option {} = {}", opt.first, opt.second);
+        env.logLogger.info("Set option {} = {}", opt.first, opt.second);
     }
 }
 
@@ -479,20 +479,20 @@ void Interpreter::executeLibname(LibnameNode* node) {
     int rc = env.defineLibrary(node->libref, node->path, node->accessMode);
     if (rc == 0)
     {
-        logLogger.info("NOTE: Libref {} was successfully assigned as follows:", node->libref);
-        logLogger.info("      Engine:        V9");
-        logLogger.info("      Physical Name : {}", node->path);
+        env.logLogger.info("NOTE: Libref {} was successfully assigned as follows:", node->libref);
+        env.logLogger.info("      Engine:        V9");
+        env.logLogger.info("      Physical Name : {}", node->path);
     }
     else {
-        logLogger.info("NOTE: Library {} does not exist.", node->libref);
+        env.logLogger.info("NOTE: Library {} does not exist.", node->libref);
     }
 }
 
 // Execute a TITLE statement
 void Interpreter::executeTitle(TitleNode* node) {
     env.setTitle(node->title);
-    logLogger.info("Title set to: '{}'", node->title);
-    lstLogger.info("Title: {}", env.title);
+    env.logLogger.info("Title set to: '{}'", node->title);
+    env.lstLogger.info("Title: {}", env.title);
 }
 
 // Execute a PROC step
@@ -570,7 +570,7 @@ Value Interpreter::evaluate(ASTNode *node) {
         }
         else {
             // Variable not found, return missing value
-            logLogger.warn("Variable '{}' not found. Using missing value.", var->varName);
+            env.logLogger.warn("Variable '{}' not found. Using missing value.", var->varName);
             return std::nan("");
         }
     }
@@ -613,7 +613,7 @@ Value Interpreter::evaluate(ASTNode *node) {
 void Interpreter::executeDrop(DropNode* node) {
     for (const auto& var : node->variables) {
         env.currentRow.columns.erase(var);
-        logLogger.info("Dropped variable '{}'.", var);
+        env.logLogger.info("Dropped variable '{}'.", var);
     }
 }
 
@@ -628,7 +628,7 @@ void Interpreter::executeKeep(KeepNode* node) {
     for (const auto& var : currentVars) {
         if (std::find(node->variables.begin(), node->variables.end(), var) == node->variables.end()) {
             env.currentRow.columns.erase(var);
-            logLogger.info("Kept variable '{}'; other variables dropped.", var);
+            env.logLogger.info("Kept variable '{}'; other variables dropped.", var);
         }
     }
 }
@@ -828,7 +828,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
         }
 
         filteredDS = tempDS.get();
-        logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
+        env.logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
     }
 
     // Sort the filtered dataset by BY variables
@@ -864,12 +864,12 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
                 seenKeys.insert(key);
             }
             else {
-                logLogger.info("Duplicate key '{}' found. Skipping duplicate observation.", key);
+                env.logLogger.info("Duplicate key '{}' found. Skipping duplicate observation.", key);
             }
         }
 
         sortedDS->rows = tempDS.get()->rows;
-        logLogger.info("Applied NODUPKEY option. {} observations remain after removing duplicates.", sortedDS->rows.size());
+        env.logLogger.info("Applied NODUPKEY option. {} observations remain after removing duplicates.", sortedDS->rows.size());
     }
 
     // Determine the output dataset
@@ -886,12 +886,12 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
 
     env.saveDataset(dsNode);
 
-    // logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
+    // env.logLogger.info("PROC SORT executed successfully. Output dataset '{}' has {} observations.",
     //     dsNode.getFullDsName(), outputDS->rows.size());
 }
 
 void Interpreter::executeProcMeans(ProcMeansNode* node) {
-    logLogger.info("Executing PROC MEANS");
+    env.logLogger.info("Executing PROC MEANS");
 
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
@@ -926,7 +926,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
         }
 
         filteredDS = tempDS.get();
-        logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
+        env.logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
     }
 
     // Initialize statistics containers
@@ -1001,7 +1001,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
     }
 
     // Generate statistics output
-    logLogger.info("Generated PROC MEANS statistics:");
+    env.logLogger.info("Generated PROC MEANS statistics:");
     for (const auto& var : node->varVariables) {
         const Stats& stats = statisticsMap[var];
         if (stats.n > 0) {
@@ -1027,7 +1027,7 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
                     ss << "  Max: " << stats.max << "\n";
                 }
             }
-            logLogger.info(ss.str());
+            env.logLogger.info(ss.str());
 
             if (outputDS) {
                 // Create a row for each statistic
@@ -1057,17 +1057,17 @@ void Interpreter::executeProcMeans(ProcMeansNode* node) {
             }
         }
         else {
-            logLogger.warn("Variable '{}' has no valid observations for PROC MEANS.", var);
+            env.logLogger.warn("Variable '{}' has no valid observations for PROC MEANS.", var);
         }
     }
 
     // If OUTPUT dataset is specified, log its creation
     if (outputDS) {
-        logLogger.info("PROC MEANS output dataset '{}' created with {} observations.",
+        env.logLogger.info("PROC MEANS output dataset '{}' created with {} observations.",
             node->outputDataSet.getFullDsName(), outputDS->rows.size());
     }
 
-    logLogger.info("PROC MEANS executed successfully.");
+    env.logLogger.info("PROC MEANS executed successfully.");
 }
 
 void Interpreter::executeIfElse(IfElseIfNode* node) {
@@ -1218,7 +1218,7 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
         double argNum = toNumber(argVal);
 
         if (argNum < 0) {
-            logLogger.warn("sqrt() received a negative value. Returning NaN.");
+            env.logLogger.warn("sqrt() received a negative value. Returning NaN.");
             return std::nan("");
         }
         return std::sqrt(argNum);
@@ -1236,7 +1236,7 @@ Value Interpreter::evaluateFunctionCall(FunctionCallNode* node) {
         double argNum = toNumber(argVal);
 
         if (argNum <= 0) {
-            logLogger.warn("log() received a non-positive value. Returning NaN.");
+            env.logLogger.warn("log() received a non-positive value. Returning NaN.");
             return std::nan("");
         }
         return std::log(argNum);
@@ -1394,7 +1394,7 @@ void Interpreter::executeMerge(MergeStatementNode* node) {
     // Sort all datasets by BY variables
     for (auto ds : mergeDatasets) {
         Sorter::sortDataset(ds, byVariables);
-        logLogger.info("Dataset '{}' sorted by BY variables.", ds->name);
+        env.logLogger.info("Dataset '{}' sorted by BY variables.", ds->name);
     }
 
     // Initialize iterators for each dataset
@@ -1526,15 +1526,15 @@ void Interpreter::executeMerge(MergeStatementNode* node) {
         outputDataSet->rows.push_back(mergedRow);
     }
 
-    logLogger.info("MERGE statement executed successfully. Output dataset '{}' has {} observations.",
+    env.logLogger.info("MERGE statement executed successfully. Output dataset '{}' has {} observations.",
         outputDataSet->name, outputDataSet->rows.size());
 }
 
 
 void Interpreter::executeBy(ByStatementNode* node) {
-    logLogger.info("Executing BY statement with variables:");
+    env.logLogger.info("Executing BY statement with variables:");
     for (const auto& var : node->variables) {
-        logLogger.info(" - {}", var);
+        env.logLogger.info(" - {}", var);
     }
 
     // Store the BY variables in the interpreter's context
@@ -1545,7 +1545,7 @@ void Interpreter::executeBy(ByStatementNode* node) {
 }
 
 void Interpreter::executeDoLoop(DoLoopNode* node) {
-    logLogger.info("Entering DO loop");
+    env.logLogger.info("Entering DO loop");
 
     // Push the loop context onto the stack
     loopStack.emplace(std::make_pair(node, 0));
@@ -1558,7 +1558,7 @@ void Interpreter::executeDoLoop(DoLoopNode* node) {
         size_t& iterationCount = loopStack.top().second;
 
         if (iterationCount >= MAX_ITERATIONS) {
-            logLogger.error("Potential infinite loop detected in DO loop. Exiting loop.");
+            env.logLogger.error("Potential infinite loop detected in DO loop. Exiting loop.");
             loopStack.pop();
             break;
         }
@@ -1582,7 +1582,7 @@ void Interpreter::executeDoLoop(DoLoopNode* node) {
         else {
             // Exit the loop
             loopStack.pop();
-            logLogger.info("Exiting DO loop");
+            env.logLogger.info("Exiting DO loop");
             break;
         }
 
@@ -1597,11 +1597,11 @@ void Interpreter::executeEnd(EndNode* node) {
 
     // Pop the current loop context to signify exiting the loop
     loopStack.pop();
-    logLogger.info("Exiting DO loop via END statement");
+    env.logLogger.info("Exiting DO loop via END statement");
 }
 
 void Interpreter::executeProcFreq(ProcFreqNode* node) {
-    logLogger.info("Executing PROC FREQ");
+    env.logLogger.info("Executing PROC FREQ");
 
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
@@ -1636,7 +1636,7 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
         }
 
         filteredDS = tempDS.get();
-        logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
+        env.logLogger.info("Applied WHERE condition. {} observations remain after filtering.", filteredDS->rows.size());
     }
 
     // Process each table specification
@@ -1681,7 +1681,7 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
             for (const auto& pair : freqMap) {
                 ss << pair.first << "\t" << pair.second << "\n";
             }
-            logLogger.info(ss.str());
+            env.logLogger.info(ss.str());
 
             // Handle OUTPUT options if any (e.g., OUT=)
             // This implementation focuses on logging frequencies. Extending to output datasets can be added here.
@@ -1744,14 +1744,14 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
                 ss << "\n";
             }
 
-            logLogger.info(ss.str());
+            env.logLogger.info(ss.str());
 
             // Handle OPTIONS like CHISQ
             for (const auto& option : tableOptions) {
                 if (option == "CHISQ") {
                     // Perform Chi-Square Test
                     // This is a simplified implementation. In practice, you would calculate the Chi-Square statistic.
-                    logLogger.info("Chi-Square test requested for the cross-tabulation.");
+                    env.logLogger.info("Chi-Square test requested for the cross-tabulation.");
                     // Placeholder for Chi-Square calculation
                 }
                 // Handle other options as needed
@@ -1761,13 +1761,13 @@ void Interpreter::executeProcFreq(ProcFreqNode* node) {
             // This implementation focuses on logging cross-tabulation. Extending to output datasets can be added here.
         }
         else {
-            logLogger.warn("Unsupported number of variables in TABLES statement: {}", vars.size());
+            env.logLogger.warn("Unsupported number of variables in TABLES statement: {}", vars.size());
         }
     }
 }
 
 void Interpreter::executeProcPrint(ProcPrintNode* node) {
-    ScopedStepTimer timer("PROCEDURE PRINT", logLogger);
+    ScopedStepTimer timer("PROCEDURE PRINT", env.logLogger);
 
     // Retrieve the input dataset
     Dataset* inputDS = env.getOrCreateDataset(node->inputDataSet).get();
@@ -1827,8 +1827,8 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
     }
 
     // Log header
-    lstLogger.info(env.title);
-    lstLogger.info(header.str());
+    env.lstLogger.info(env.title);
+    env.lstLogger.info(header.str());
 
     // Iterate over rows and print data
     int obsCount = 0;
@@ -1863,15 +1863,15 @@ void Interpreter::executeProcPrint(ProcPrintNode* node) {
                 rowStream << "\t";
             }
         }
-        lstLogger.info(rowStream.str());
+        env.lstLogger.info(rowStream.str());
         obsCount++;
     }
 
-    logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->getRowCount(), node->inputDataSet.getFullDsName());
+    env.logLogger.info("NOTE: There were {} observations read from the data set {}.", inputDS->getRowCount(), node->inputDataSet.getFullDsName());
 }
 
 void Interpreter::executeProcSQL(ProcSQLNode* node) {
-    logLogger.info("Executing PROC SQL");
+    env.logLogger.info("Executing PROC SQL");
 
     for (const auto& sqlStmt : node->statements) {
         if (auto selectStmt = dynamic_cast<SelectStatementNode*>(sqlStmt.get())) {
@@ -1884,11 +1884,11 @@ void Interpreter::executeProcSQL(ProcSQLNode* node) {
             executeCreateTable(createStmt);
         }
         else {
-            logLogger.warn("Unsupported SQL statement encountered in PROC SQL.");
+            env.logLogger.warn("Unsupported SQL statement encountered in PROC SQL.");
         }
     }
 
-    logLogger.info("PROC SQL executed successfully.");
+    env.logLogger.info("PROC SQL executed successfully.");
 }
 
 Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
@@ -1952,7 +1952,7 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
     if (!selectStmt->groupByColumns.empty()) {
         // Implement GROUP BY logic with aggregations
         // For simplicity, this implementation does not handle aggregations
-        logLogger.warn("GROUP BY clauses are not yet fully supported in PROC SQL.");
+        env.logLogger.warn("GROUP BY clauses are not yet fully supported in PROC SQL.");
     }
 
     // Handle ORDER BY clause if present
@@ -2025,7 +2025,7 @@ Dataset* Interpreter::executeSelect(const SelectStatementNode* selectStmt) {
         }
     }
 
-    logLogger.info(ss.str());
+    env.logLogger.info(ss.str());
 
     return resultDS;
 }
@@ -2042,7 +2042,7 @@ void Interpreter::executeCreateTable(const CreateTableStatementNode* createStmt)
         // todo newDS->columns[col] = Value(); // Initialize with default values
     }
 
-    logLogger.info("PROC SQL: Created table '{}'.", dsNode.getFullDsName());
+    env.logLogger.info("PROC SQL: Created table '{}'.", dsNode.getFullDsName());
 }
 
 // Implement other SQL statement executors (INSERT, UPDATE, DELETE) as needed
@@ -2061,7 +2061,7 @@ std::string Interpreter::resolveMacroVariables(const std::string& input) {
 
         auto it = macroVariables.find(varName);
         if (it != macroVariables.end()) {
-            logLogger.debug("Resolving macro variable '&{}' to '{}'", varName, it->second);
+            env.logLogger.debug("Resolving macro variable '&{}' to '{}'", varName, it->second);
             result.replace(startPos, endPos - startPos, it->second);
         }
         else {
@@ -2075,7 +2075,7 @@ std::string Interpreter::resolveMacroVariables(const std::string& input) {
 
 void Interpreter::executeMacroVariableAssignment(MacroVariableAssignmentNode* node) {
     macroVariables[node->varName] = resolveMacroVariables(node->value);
-    logLogger.info("Macro variable '{}' set to '{}'", node->varName, macroVariables[node->varName]);
+    env.logLogger.info("Macro variable '{}' set to '{}'", node->varName, macroVariables[node->varName]);
 }
 
 void Interpreter::executeMacroDefinition(std::unique_ptr<MacroDefinitionNode> node) {
@@ -2083,7 +2083,7 @@ void Interpreter::executeMacroDefinition(std::unique_ptr<MacroDefinitionNode> no
         throw std::runtime_error("Macro '" + node->macroName + "' is already defined.");
     }
     macros[node->macroName] = std::move(node);
-    logLogger.info("Macro '{}' defined.", macros[node->macroName]->macroName);
+    env.logLogger.info("Macro '{}' defined.", macros[node->macroName]->macroName);
 }
 
 void Interpreter::executeMacroCall(MacroCallNode* node) {
@@ -2121,7 +2121,7 @@ void Interpreter::executeMacroCall(MacroCallNode* node) {
     // Restore original macro variables
     macroVariables = backup;
 
-    logLogger.info("Macro '{}' executed successfully.", macro->macroName);
+    env.logLogger.info("Macro '{}' executed successfully.", macro->macroName);
 }
 
 void Interpreter::reset() {
@@ -2135,7 +2135,7 @@ void Interpreter::reset() {
     arrays.clear();
 
     // Reset other interpreter state as needed
-    logLogger.info("Interpreter state has been reset.");
+    env.logLogger.info("Interpreter state has been reset.");
 }
 
 void Interpreter::handleReplInput(const std::string& input) {
@@ -2150,7 +2150,7 @@ void Interpreter::handleReplInput(const std::string& input) {
         parseResult = parser.parseStatement();
     }
     catch (const std::runtime_error& e) {
-        logLogger.error("Parsing error: {}", e.what());
+        env.logLogger.error("Parsing error: {}", e.what());
         return;
     }
 
@@ -2161,7 +2161,7 @@ void Interpreter::handleReplInput(const std::string& input) {
         }
     }
     catch (const std::runtime_error& e) {
-        logLogger.error("Execution error: {}", e.what());
+        env.logLogger.error("Execution error: {}", e.what());
     }
 }
 

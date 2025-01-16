@@ -11,6 +11,7 @@
 #include <sstream>
 #include <iostream>
 #include <map>
+#include <spdlog/spdlog.h>
 #include "Dataset.h"
 #include "Library.h"
 #include "sasdoc.h"
@@ -20,8 +21,10 @@ namespace sass {
     // Manages datasets, global options, librefs, and titles
     class DataEnvironment {
     public:
-        DataEnvironment();
+        DataEnvironment(spdlog::logger& logLogger, spdlog::logger& lstLogger);
         ~DataEnvironment();
+        spdlog::logger& logLogger;
+        spdlog::logger& lstLogger;
 
         // Current row being processed in a DATA step
         Row currentRow;

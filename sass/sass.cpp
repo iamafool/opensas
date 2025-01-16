@@ -28,7 +28,7 @@ std::string readSasFile(const std::string& filename) {
 }
 
 // Function to run SAS code
-void runSasCode(const std::string& sasCode, Interpreter& interpreter, bool interactive) {
+void runSasCode(const std::string& sasCode, Interpreter& interpreter, DataEnvironment& env, bool interactive) {
 	// Lexing
 	Lexer lexer(sasCode);
 	std::vector<Token> tokens;
@@ -44,7 +44,7 @@ void runSasCode(const std::string& sasCode, Interpreter& interpreter, bool inter
 		program = parser.parseProgram();
 	}
 	catch (const std::runtime_error& e) {
-		interpreter.logLogger.error("Parsing failed: {}", e.what());
+		env.logLogger.error("Parsing failed: {}", e.what());
 		return;
 	}
 
@@ -53,7 +53,7 @@ void runSasCode(const std::string& sasCode, Interpreter& interpreter, bool inter
 		interpreter.executeProgram(program);
 	}
 	catch (const std::runtime_error& e) {
-		interpreter.logLogger.error("Execution failed: {}", e.what());
+		env.logLogger.error("Execution failed: {}", e.what());
 	}
 }
 
@@ -130,8 +130,8 @@ int main(int argc, char** argv)
 	lstLogger->set_level(spdlog::level::info);
 	lstLogger->set_pattern("%v");
 
-	DataEnvironment env;
-	Interpreter interpreter(env, *logLogger, *lstLogger);
+	DataEnvironment env(*logLogger, *lstLogger);
+	Interpreter interpreter(env);
 
 	std::string sasCode;
 
@@ -151,7 +151,7 @@ int main(int argc, char** argv)
 			return 1;
 		}
 
-		runSasCode(sasCode, interpreter, false);
+		runSasCode(sasCode, interpreter, env, false);
 	}
 	else if (batchMode) {
 		// Batch mode: read code from sasFile, log and lst to files
@@ -162,7 +162,7 @@ int main(int argc, char** argv)
 			return 1;
 		}
 
-		runSasCode(sasCode, interpreter, false);
+		runSasCode(sasCode, interpreter, env, false);
 	}
 
 	return 0;

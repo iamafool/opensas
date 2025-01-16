@@ -4,7 +4,6 @@
 #include "AST.h"
 #include "DataEnvironment.h"
 #include <memory>
-#include <spdlog/spdlog.h>
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -14,11 +13,9 @@
 namespace sass {
     class Interpreter {
     public:
-        Interpreter(DataEnvironment& env, spdlog::logger& logLogger, spdlog::logger& lstLogger)
-            : env(env), logLogger(logLogger), lstLogger(lstLogger) {}
+        Interpreter(DataEnvironment& env) : env(env) {}
 
         void executeProgram(const std::unique_ptr<ProgramNode>& program);
-        spdlog::logger& logLogger;
         void execute(ASTNode* node);
 
         void executeDataStepStatement(ASTNode* stmt);
@@ -34,7 +31,6 @@ namespace sass {
         PDV* pdv = nullptr;
         SasDoc* doc = nullptr;
         DataStepNode* dsNode = nullptr;
-        spdlog::logger& lstLogger;
         // Add a member variable to hold arrays
         std::unordered_map<std::string, std::vector<std::string>> arrays;
         std::vector<std::string> retainVars;

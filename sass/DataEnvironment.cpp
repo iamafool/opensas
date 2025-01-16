@@ -11,8 +11,8 @@ using namespace std;
 namespace fs = std::filesystem;
 
 namespace sass {
-    DataEnvironment::DataEnvironment()
-        : workCreated(false)
+    DataEnvironment::DataEnvironment(spdlog::logger& logLogger, spdlog::logger& lstLogger)
+        : workCreated(false), logLogger(logLogger), lstLogger(lstLogger)
     {
         // create a subfolder in system temp
         this->workFolder = createUniqueTempFolder();

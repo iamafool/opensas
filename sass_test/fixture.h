@@ -14,8 +14,6 @@ protected:
     std::shared_ptr<spdlog::logger> lstLogger;
 
     SassTest() {
-        env = new DataEnvironment();
-
         try {
             auto logSink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
             auto lstSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
@@ -29,8 +27,8 @@ protected:
 
         logLogger->set_level(spdlog::level::off);
         lstLogger->set_level(spdlog::level::off);
-
-        interpreter = new Interpreter(*env, *logLogger, *lstLogger);
+        env = new DataEnvironment(*logLogger, *lstLogger);
+        interpreter = new Interpreter(*env);
     }
 
     ~SassTest() override {
