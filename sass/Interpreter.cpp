@@ -876,7 +876,7 @@ void Interpreter::executeProcSort(ProcSortNode* node) {
             }
         }
 
-        sortedDS = tempDS.get();
+        sortedDS->rows = tempDS.get()->rows;
         logLogger.info("Applied NODUPKEY option. {} observations remain after removing duplicates.", sortedDS->rows.size());
     }
 
